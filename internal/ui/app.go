@@ -427,7 +427,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // emacsArrow maps ctrl+n / ctrl+p to down / up, so they move like the
-// arrows in lists and the Start panel.
+// arrows in lists. (In the Start panel they move between fields.)
 func emacsArrow(k string) string {
 	switch k {
 	case "ctrl+n":

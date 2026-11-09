@@ -23,9 +23,9 @@ var (
 		{"o / p", "open task / PR"},
 	}
 	panelKeys = []keyHelp{
-		{"tab", "next field"},
+		{"tab ctrl+n/p", "next/prev field"},
 		{"space / ←→", "change value"},
-		{"↑↓ ctrl+n/p", "move in list"},
+		{"↑↓", "move in list"},
 		{"enter", "launch"},
 		{"esc", "close"},
 	}

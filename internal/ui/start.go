@@ -244,17 +244,17 @@ func cycle(i, d, n int) int {
 
 func (a *App) startKey(msg tea.KeyPressMsg) tea.Cmd {
 	p := a.start
-	k := emacsArrow(msg.String())
+	k := msg.String()
 	switch k {
 	case "esc":
 		a.mode, a.start = modeNormal, nil
 		return nil
 	case "enter", "ctrl+s": // all fields are one line, so enter launches
 		return a.launch()
-	case "tab":
+	case "tab", "ctrl+n":
 		p.moveField(1)
 		return nil
-	case "shift+tab":
+	case "shift+tab", "ctrl+p":
 		p.moveField(-1)
 		return nil
 	case "up", "down", "left", "right":

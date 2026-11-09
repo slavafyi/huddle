@@ -93,7 +93,8 @@ func TestStatusPickerCtrlNP(t *testing.T) {
 	}
 }
 
-// ctrl+n / ctrl+p work like ↓ / ↑ in every list and in the Start panel.
+// ctrl+n / ctrl+p work like ↓ / ↑ in every list; in the Start panel they
+// move between fields like tab / shift+tab.
 func TestCtrlNPMoveLikeArrows(t *testing.T) {
 	ctrl := func(r rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: r, Mod: tea.ModCtrl} }
 	e := newEnv(t)
@@ -115,13 +116,13 @@ func TestCtrlNPMoveLikeArrows(t *testing.T) {
 		}
 	}
 	selectTask(t, e, "t2")
-	e.press("enter", "tab") // → repo
+	e.press("enter") // workspace
 	e.app.Update(ctrl('n'))
-	if e.app.start.repoIdx != 1 {
-		t.Errorf("panel ctrl+n: repo %d", e.app.start.repoIdx)
+	if e.app.start.field != fRepo || e.app.start.repoIdx != 0 {
+		t.Errorf("panel ctrl+n: field %v repo %d", e.app.start.field, e.app.start.repoIdx)
 	}
 	e.app.Update(ctrl('p'))
-	if e.app.start.repoIdx != 0 || e.app.start.field != fRepo {
-		t.Errorf("panel ctrl+p: repo %d field %v", e.app.start.repoIdx, e.app.start.field)
+	if e.app.start.field != fWorkspace {
+		t.Errorf("panel ctrl+p: field %v", e.app.start.field)
 	}
 }
