@@ -489,8 +489,9 @@ fold into §4.4, §5 and the key list.
     while focused and typing, a list of up to 4 matches opens under it),
     `Branch` (worktree only), `Folder` (scratch only).
   - **AGENT:** all agents as radios, 3 per row.
-  - **PROMPT:** 4 lines tall, wraps; longer text scrolls to keep the end.
-    Then the `[x] Move to …` / `[x] Assign to me` rows.
+  - **PROMPT:** a thin box (faint border, normal while focused), 4 lines
+    tall, wraps; longer text scrolls to keep the end. Under it the
+    left-aligned `[x] Move to …` / `[x] Assign to me` rows.
 - Bottom: `Launch ⏎` and faint `esc cancel`.
 - Keys unchanged: `tab` / `shift+tab` move, `space` / `←→` change,
   `enter` launches.
