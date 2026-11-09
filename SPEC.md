@@ -479,14 +479,15 @@ fold into §4.4, §5 and the key list.
 
 ### 16.1 Start panel
 
-- Box titled `Start`, 54 columns. Top: `{id} {title}` (title bold), then
+- Box titled `Start`, 54 columns. Top: `{id} {title}` (title bold,
+  wrapped under itself, up to 3 lines, `…` only past that), then
   `{project} · {status}`.
 - Three sections, each a faint rule `WHERE ───`, `AGENT ───`,
   `PROMPT ───`, with a blank line before each:
   - **WHERE:** `Rex  {session} › new tab` (faint "· session created" when
     missing) first, then rows with a 10-column label: `Workspace` (radios
     on the same row), `Repo` (current repo, faint `+N · type to filter`;
-    while focused and typing, a list of up to 4 matches opens under it),
+    while focused, a list of up to 4 matches opens under it),
     `Branch` (worktree only), `Folder` (scratch only).
   - **AGENT:** all agents as radios, 3 per row.
   - **PROMPT:** a thin box (faint border, normal while focused), 4 lines
