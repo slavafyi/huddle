@@ -17,6 +17,13 @@ func box(lines []string, width int) []string {
 	return append(out, sFaint.Render("└"+strings.Repeat("─", width-2)+"┘"))
 }
 
+// titledBox is box with a title in its top border: ┌─ Title ───┐.
+func titledBox(lines []string, width int, title string) []string {
+	out := box(lines, width)
+	out[0] = sFaint.Render("┌─ ") + sBold.Render(title) + sFaint.Render(" "+strings.Repeat("─", width-5-ansi.StringWidth(title))+"┐")
+	return out
+}
+
 // overlay draws top over base, with its top-left corner at column x, row y.
 func overlay(base string, top []string, x, y int) string {
 	lines := strings.Split(base, "\n")

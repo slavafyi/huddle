@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/slavafyi/huddle/internal/github"
 	"github.com/slavafyi/huddle/internal/run"
+	"github.com/slavafyi/huddle/internal/task"
 	"github.com/slavafyi/huddle/internal/workspace"
 )
 
@@ -19,8 +21,8 @@ func TestEnterOpensStartPanelWithDefaults(t *testing.T) {
 		t.Fatal("panel not open")
 	}
 	p := e.app.start
-	if p.kind != workspace.Worktree {
-		t.Errorf("kind = %v", p.kind)
+	if p.kind != workspace.Checkout {
+		t.Errorf("kind = %v, want checkout by default", p.kind)
 	}
 	if r, _ := p.repo(); r.Name != "snowcap" {
 		t.Errorf("first repo = %q (want client match first)", r.Name)
@@ -32,7 +34,7 @@ func TestEnterOpensStartPanelWithDefaults(t *testing.T) {
 		t.Errorf("move=%v showAssign=%v", p.moveStatus, p.showAssign)
 	}
 	out := plain(e)
-	for _, want := range []string{"Start task", "DEV-7700", "● worktree", "snowcap", "feature/dev-7700-promo", "Take a task DEV-7700 from CU", "new tab in session Snowcap", "Move to in progress", "Launch ⏎"} {
+	for _, want := range []string{"Start", "DEV-7700", "WHERE", "AGENT", "PROMPT", "● checkout", "snowcap", "Take a task DEV-7700 from CU", "Rex", "Snowcap › new tab", "[x] Move to in progress", "Launch ⏎", "┌──"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("panel missing %q:\n%s", want, out)
 		}
@@ -69,7 +71,6 @@ func TestPanelEditing(t *testing.T) {
 	selectTask(t, e, "t2")
 	e.press("enter")
 	p := e.app.start
-	e.press("right") // workspace → checkout
 	if p.kind != workspace.Checkout {
 		t.Errorf("kind = %v", p.kind)
 	}
@@ -125,7 +126,7 @@ func TestLaunchUsesExistingClientSessionAndRemembersRepo(t *testing.T) {
 	e.app.state.ClientSessions = map[string]string{"Snowcap": "session:S"}
 	e.load(t)
 	selectTask(t, e, "t2")
-	e.press("enter", "tab", "s", "u", "b", "tab", "tab", "tab", "x", "ctrl+s")
+	e.press("enter", "left", "tab", "s", "u", "b", "tab", "tab", "tab", "x", "ctrl+s") // worktree
 	if len(e.rex.calls) == 0 || !strings.HasPrefix(e.rex.calls[0], "new-window session:S | DEV-7700 ") {
 		t.Fatalf("rex calls: %v", e.rex.calls)
 	}
@@ -149,7 +150,7 @@ func TestLaunchErrorKeepsPanelClosedAndShowsError(t *testing.T) {
 	e.runner.Responses = []run.Response{{Match: "git -C /r/snowcap fetch", Err: errors.New("could not read from remote")}}
 	e.load(t)
 	selectTask(t, e, "t2")
-	e.press("enter", "ctrl+s")
+	e.press("enter", "left", "ctrl+s") // worktree
 	if !strings.Contains(plain(e), "could not read from remote") {
 		t.Errorf("error not shown:\n%s", plain(e))
 	}
@@ -164,11 +165,11 @@ func TestPanelTabAndSpace(t *testing.T) {
 	selectTask(t, e, "t2")
 	e.press("enter")
 	p := e.app.start
-	e.press("space") // workspace: worktree → checkout
-	if p.kind != workspace.Checkout {
+	e.press("space") // workspace: checkout → scratch
+	if p.kind != workspace.Scratch {
 		t.Fatalf("space: kind = %v", p.kind)
 	}
-	e.press("h", "j", "k", "l") // letters do nothing on a choice field
+	e.press("h", "j", "k", "l", "left") // letters do nothing on a choice field
 	if p.kind != workspace.Checkout || p.field != fWorkspace {
 		t.Fatalf("letters changed the panel: kind=%v field=%v", p.kind, p.field)
 	}
@@ -202,5 +203,29 @@ func TestLongPromptWrapsInsteadOfCutting(t *testing.T) {
 	out := plain(e)
 	if !strings.Contains(out, "END") {
 		t.Errorf("end of a long prompt is hidden:\n%s", out)
+	}
+}
+
+func TestLongTitleWrapsInPanel(t *testing.T) {
+	e := withIssues(t)
+	selectIn(t, e, "3", task.Ref(github.IssuesSource, "acme/shop#42"))
+	e.press("enter")
+	e.app.start.task.Name = "Account portal: Pause, Skip Next Order, and the frequency picker END"
+	out := plain(e)
+	if !strings.Contains(out, "frequency picker END") {
+		t.Errorf("title cut instead of wrapped:\n%s", out)
+	}
+}
+
+func TestShortPanelKeepsLaunch(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t2")
+	e.press("enter")
+	for _, h := range []int{40, 24, 18} {
+		lines := e.app.renderStart(h)
+		if len(lines) > h || !strings.Contains(strings.Join(lines, "\n"), "Launch ⏎") {
+			t.Errorf("height %d: %d lines, launch shown=%v", h, len(lines), strings.Contains(strings.Join(lines, "\n"), "Launch ⏎"))
+		}
 	}
 }

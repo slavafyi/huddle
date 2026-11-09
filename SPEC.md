@@ -117,13 +117,14 @@ Otherwise open the Start panel (`shift+enter` always opens it).
 
 Panel choices and defaults:
 
-- **Workspace:** repo worktree (default), repo checkout, or scratch folder.
+- **Workspace:** repo checkout (default), repo worktree, or scratch folder.
   Scratch is the default for type Idea or titles starting with Research,
   Evaluate, Investigate, Check, Audit.
 - **Repo:** the last ones used for this client first.
 - **Branch:** `feature/{id_lower}-{slug}` (slug: lowercase ASCII, up to 5
   words), e.g. `feature/dev-7700-promo-checkout-personalisation`.
-- **Agent:** Claude (default), Codex, or shell only.
+- **Agent:** claude (default), codex, pi, opencode, cursor, your own
+  `[agents]` (sorted), shell.
 - **Prompt:** empty means `Take a task {id} from CU`.
 - **Move to in progress** if the task is `to plan` / `to start`.
 - **Assign to me**: only shown when I'm not an assignee.
@@ -134,7 +135,10 @@ the local clone among `repo_roots` whose `origin` remote is the issue's
 is scanned). Without one the panel says `no local clone of owner/repo in
 repo_roots`, and worktree / checkout launches stop with that message
 (scratch still works). Branch `feature/{number}-{slug}`, prompt
-`Take issue {full_id}` (`{full_id}` = `owner/repo#42`), no "Move to" row,
+`Take an issue #{number}` (the agent starts in the repo), or
+`Take an issue {full_id}` in a scratch folder (`{full_id}` =
+`owner/repo#42`); switching the workspace updates an unedited prompt. No
+"Move to" row,
 Rex session named after the repo. The `branch_template` and
 `prompt_template` settings apply to ClickUp tasks only. Folder names use the
 ID with unsafe characters as `-` (`shop#42` → `shop-42`).
@@ -472,10 +476,10 @@ them into Today (the "Open" group) is noise.
 2. **Built.** Tabs per source and Today = main source (§4.2). Cache
    version 4 (issue labels). Issues show UPDATED age, not created age.
 
-## 16. Start panel, more agents, profile toggle (planned)
+## 16. Start panel, more agents, profile toggle (done; steps 1–3 built)
 
-Decided 2026-11-09. When built,
-fold into §4.4, §5 and the key list.
+Decided 2026-11-09. §4.4 holds
+the defaults; the layout below is the current behavior.
 
 ### 16.1 Start panel
 
@@ -486,14 +490,17 @@ fold into §4.4, §5 and the key list.
   `PROMPT ───`, with a blank line before each:
   - **WHERE:** `Rex  {session} › new tab` (faint "· session created" when
     missing) first, then rows with a 10-column label: `Workspace` (radios
-    on the same row), `Repo` (current repo, faint `+N · type to filter`;
+    on the same row), `Repo` (current repo, faint `+N`;
     while focused, a list of up to 4 matches opens under it),
     `Branch` (worktree only), `Folder` (scratch only).
   - **AGENT:** all agents as radios, 3 per row.
   - **PROMPT:** a thin box (faint border, normal while focused), 4 lines
     tall, wraps; longer text scrolls to keep the end. Under it the
     left-aligned `[x] Move to …` / `[x] Assign to me` rows.
-- Bottom: `Launch ⏎` and faint `esc cancel`.
+- Bottom: `Launch ⏎`. No key hints (they are in `?`).
+- Short terminal: the prompt box shrinks (down to 1 line), then blank
+  lines go; `Launch ⏎` always shows. Long folder names and the "no local
+  clone" message get their own line; a long branch shows its end.
 - Keys unchanged: `tab` / `shift+tab` move, `space` / `←→` change,
   `enter` launches.
 - Workspace default: **checkout** (was worktree); scratch rules unchanged.
@@ -526,6 +533,6 @@ other profile". `P` stays for the picker. Listed in `?`.
 
 ### 16.5 Build order
 
-1. Agents and prompts (§16.2–16.3).
-2. Profile toggle (§16.4).
-3. First Start panel and checkout default (§16.1).
+1. **Built.** Agents and prompts (§16.2–16.3).
+2. **Built.** Profile toggle (§16.4); `?` says "last profile".
+3. **Built.** First Start panel and checkout default (§16.1).

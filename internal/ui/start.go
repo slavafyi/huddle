@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/slavafyi/huddle/internal/launch"
@@ -24,8 +26,8 @@ import (
 // panelWidth is the Start panel's width, border included.
 const panelWidth = 54
 
-// maxPromptLines is how many lines of the prompt the panel shows.
-const maxPromptLines = 6
+// promptLines is the height of the prompt box.
+const promptLines = 4
 
 type field int
 
@@ -157,6 +159,7 @@ func (a *App) openStart(t task.Task) {
 	} else {
 		p.repos = workspace.RankRepos(a.cache.Repos, t.Project, a.state.RecentRepos[t.Project])
 	}
+	p.kind = workspace.Checkout
 	if task.WantsScratch(t, cfg.ScratchTypes, cfg.ScratchPrefixes) {
 		p.kind = workspace.Scratch
 	}
@@ -470,15 +473,38 @@ func (a *App) statusInfo(t task.Task, name string) (task.Status, bool) {
 	return task.Status{}, false
 }
 
+// renderStart draws the panel in at most height rows. When space is short
+// the prompt box shrinks first, then blank lines go; Launch always shows.
 func (a *App) renderStart(height int) []string {
+	room := max(1, height-2)
+	var lines []string
+	for rows := promptLines; rows >= 1; rows-- {
+		if lines = a.startLines(rows); len(lines) <= room {
+			break
+		}
+	}
+	if len(lines) > room {
+		lines = slices.DeleteFunc(lines, func(l string) bool { return l == "" })
+	}
+	if len(lines) > room {
+		lines = append(lines[:room-1], lines[len(lines)-1])
+	}
+	return titledBox(lines, panelWidth, "Start")
+}
+
+// startLines are the panel's lines with a prompt box rows tall.
+func (a *App) startLines(rows int) []string {
 	p, t := a.start, a.start.task
 	inner := panelWidth - 4
+	const labelW = 10
+	// label is a field's label column: bold with › while focused.
 	label := func(f field, s string) string {
 		if p.field == f {
-			return sBold.Render("› " + s)
+			return sBold.Render("› " + fmt.Sprintf("%-*s", labelW, s))
 		}
-		return sFaint.Render("  " + s)
+		return sFaint.Render("  " + fmt.Sprintf("%-*s", labelW, s))
 	}
+	fixed := func(s string) string { return sFaint.Render("  " + fmt.Sprintf("%-*s", labelW, s)) }
 	opt := func(on bool, s string) string {
 		if on {
 			return sGreen.Render("●") + " " + s
@@ -491,96 +517,139 @@ func (a *App) renderStart(height int) []string {
 		}
 		return ""
 	}
-	lines := []string{
-		sBold.Render("Start task"),
-		sCyan.Render(t.Key) + " " + t.Name,
-		sFaint.Render(t.Project + " · " + t.Status),
-		"",
-		label(fWorkspace, "Workspace"),
-		"  " + opt(p.kind == workspace.Worktree, "worktree") + "  " + opt(p.kind == workspace.Checkout, "checkout") + "  " + opt(p.kind == workspace.Scratch, "scratch"),
+	rule := func(name string) string {
+		return sFaint.Render(name + " " + strings.Repeat("─", inner-len(name)-1))
 	}
-	if p.kind != workspace.Scratch && p.fixedRepo {
-		lines = append(lines, sFaint.Render("  Repo"))
+	indent := strings.Repeat(" ", 2+labelW)
+
+	// Title: wrapped under itself, up to 3 lines.
+	key := ansi.StringWidth(t.Key) + 1
+	title := strings.Split(ansi.Wrap(t.Name, inner-key, ""), "\n")
+	if len(title) > 3 {
+		title = title[:3]
+		title[2] = ansi.Truncate(title[2], inner-key-1, "") + "…"
+	}
+	lines := []string{sCyan.Render(t.Key) + " " + sBold.Render(title[0])}
+	for _, l := range title[1:] {
+		lines = append(lines, strings.Repeat(" ", key)+sBold.Render(l))
+	}
+	lines = append(lines, sFaint.Render(t.Project+" · "+t.Status))
+
+	// WHERE
+	rex := fixed("Rex") + sBold.Render(t.Project) + sFaint.Render(" › new tab")
+	if p.session == "" {
+		rex += sFaint.Render(" · session created")
+	}
+	lines = append(lines, "", rule("WHERE"), rex,
+		label(fWorkspace, "Workspace")+opt(p.kind == workspace.Worktree, "worktree")+" "+opt(p.kind == workspace.Checkout, "checkout")+" "+opt(p.kind == workspace.Scratch, "scratch"))
+	switch {
+	case p.kind == workspace.Scratch:
+		dir := workspace.Plan{Kind: workspace.Scratch, ScratchRoot: a.deps.Config.ScratchRoot, TaskKey: t.FolderKey(), Slug: workspace.Slug(t.Name)}.Dir()
+		parent := shortHome(filepath.Dir(dir)) + "/"
+		if w := ansi.StringWidth(parent); w > inner-len(indent) {
+			parent = "…" + ansi.TruncateLeft(parent, w-(inner-len(indent)-1), "")
+		}
+		// The folder name gets a whole line: it is often long.
+		lines = append(lines, fixed("Folder")+sFaint.Render(parent), "  "+filepath.Base(dir))
+	case p.fixedRepo:
 		if r, ok := p.repo(); ok {
-			lines = append(lines, "  "+r.Name)
+			lines = append(lines, fixed("Repo")+r.Name)
 		} else {
-			lines = append(lines, sRed.Render("  "+p.noClone))
+			lines = append(lines, fixed("Repo")+sRed.Render("none"), "  "+sRed.Render(p.noClone))
 		}
-	}
-	if p.kind != workspace.Scratch && !p.fixedRepo {
-		head := "Repo"
-		if p.repoFilter != "" {
-			head = `Repo · "` + p.repoFilter + `"` + caret(fRepo)
-		}
-		lines = append(lines, label(fRepo, head))
+	default:
 		rs := p.filtered()
-		if len(rs) == 0 {
-			lines = append(lines, sRed.Render("  no repo matches"))
-		}
 		sel := min(p.repoIdx, max(0, len(rs)-1))
-		start := max(0, min(sel-1, len(rs)-4))
-		for i := start; i < len(rs) && i < start+4; i++ {
-			if i == sel {
-				lines = append(lines, "  "+sBold.Render("› "+rs[i].Name))
-			} else {
-				lines = append(lines, sFaint.Render("    "+rs[i].Name))
+		switch {
+		case p.field == fRepo || p.repoFilter != "":
+			lines = append(lines, label(fRepo, "Repo")+`"`+p.repoFilter+`"`+caret(fRepo))
+			if len(rs) == 0 {
+				lines = append(lines, indent+sRed.Render("no repo matches"))
 			}
-		}
-		if rest := len(rs) - (start + 4); rest > 0 {
-			lines = append(lines, sFaint.Render("    +"+strconv.Itoa(rest)+" more"))
+			start := max(0, min(sel-1, len(rs)-4))
+			for i := start; i < len(rs) && i < start+4; i++ {
+				if i == sel {
+					lines = append(lines, indent+sBold.Render("› "+rs[i].Name))
+				} else {
+					lines = append(lines, indent+sFaint.Render("  "+rs[i].Name))
+				}
+			}
+		case len(rs) == 0:
+			lines = append(lines, label(fRepo, "Repo")+sRed.Render("no repos in repo_roots"))
+		default:
+			row := label(fRepo, "Repo") + rs[sel].Name
+			if n := len(rs) - 1; n > 0 {
+				row += sFaint.Render(" +" + strconv.Itoa(n))
+			}
+			lines = append(lines, row)
 		}
 	}
 	if p.kind == workspace.Worktree {
-		lines = append(lines, label(fBranch, "Branch"), "  "+p.branch+caret(fBranch))
-	}
-	if p.kind == workspace.Scratch {
-		dir := workspace.Plan{Kind: workspace.Scratch, ScratchRoot: a.deps.Config.ScratchRoot, TaskKey: t.FolderKey(), Slug: workspace.Slug(t.Name)}.Dir()
-		parent := shortHome(filepath.Dir(dir)) + "/"
-		if w := ansi.StringWidth(parent); w > inner-2 {
-			parent = "…" + ansi.TruncateLeft(parent, w-(inner-3), "")
+		// A long branch shows its end, where you type.
+		b := p.branch + caret(fBranch)
+		if w, room := ansi.StringWidth(b), inner-len(indent); w > room {
+			b = "…" + ansi.TruncateLeft(b, w-room+1, "")
 		}
-		lines = append(lines, sFaint.Render("  Folder"), "  "+sFaint.Render(parent), "  "+filepath.Base(dir))
+		lines = append(lines, label(fBranch, "Branch")+b)
 	}
-	where := "new tab in session " + sBold.Render(t.Project) + sFaint.Render(" (created if missing)")
-	if p.session != "" {
-		where = "new tab in session " + sBold.Render(t.Project)
+
+	// AGENT: 3 per row; the › marks the section while focused.
+	head := rule("AGENT")
+	if p.field == fAgent {
+		head = sBold.Render("› AGENT") + sFaint.Render(" "+strings.Repeat("─", inner-8))
 	}
-	lines = append(lines, sFaint.Render("  Rex"), "  "+where)
-	var agents []string
-	for i, n := range p.agents {
-		agents = append(agents, opt(i == p.agentIdx, n))
+	lines = append(lines, "", head)
+	for i := 0; i < len(p.agents); i += 3 {
+		row := "  "
+		for j := i; j < min(i+3, len(p.agents)); j++ {
+			cell := opt(j == p.agentIdx, p.agents[j])
+			row += cell + strings.Repeat(" ", max(1, 14-ansi.StringWidth(cell)))
+		}
+		lines = append(lines, row)
 	}
-	lines = append(lines, label(fAgent, "Agent"), "  "+strings.Join(agents, "  "))
-	lines = append(lines, label(fPrompt, "Prompt"))
-	// Wrap the prompt so all of it shows; keep the end (where you type)
-	// when it is very long.
-	wrapped := strings.Split(ansi.Wrap(p.prompt+caret(fPrompt), inner-2, ""), "\n")
-	if len(wrapped) > maxPromptLines {
-		wrapped = append([]string{sFaint.Render("…")}, wrapped[len(wrapped)-maxPromptLines+1:]...)
+
+	// PROMPT: a thin box, 4 lines; a long prompt keeps its end in view.
+	head = rule("PROMPT")
+	border := sFaint
+	if p.field == fPrompt {
+		head = sBold.Render("› PROMPT") + sFaint.Render(" "+strings.Repeat("─", inner-9))
+		border = lipgloss.NewStyle()
 	}
-	for _, l := range wrapped {
-		lines = append(lines, "  "+l)
+	lines = append(lines, "", head, "  "+border.Render("┌"+strings.Repeat("─", inner-4)+"┐"))
+	w := inner - 6
+	wrapped := strings.Split(ansi.Wrap(p.prompt+caret(fPrompt), w, ""), "\n")
+	if len(wrapped) > rows {
+		wrapped = append([]string{sFaint.Render("…")}, wrapped[len(wrapped)-rows+1:]...)[:rows]
 	}
-	check := func(on bool) string {
+	for i := range rows {
+		l := ""
+		if i < len(wrapped) {
+			l = wrapped[i]
+		}
+		lines = append(lines, "  "+border.Render("│")+" "+l+strings.Repeat(" ", max(0, w-ansi.StringWidth(l)))+" "+border.Render("│"))
+	}
+	lines = append(lines, "  "+border.Render("└"+strings.Repeat("─", inner-4)+"┘"))
+	check := func(f field, on bool, s string) string {
+		box := "[ ] "
 		if on {
-			return "[x]"
+			box = "[x] "
 		}
-		return "[ ]"
+		if p.field == f {
+			return sBold.Render("› " + box + s)
+		}
+		return "  " + box + s
 	}
 	if p.showMove {
-		lines = append(lines, label(fMove, check(p.moveStatus)+" Move to "+a.deps.Config.StatusInProgress))
+		lines = append(lines, check(fMove, p.moveStatus, "Move to "+a.deps.Config.StatusInProgress))
 	}
 	if p.showAssign {
-		lines = append(lines, label(fAssign, check(p.assign)+" Assign to me"+sFaint.Render(" (now: "+t.With()+")")))
+		lines = append(lines, check(fAssign, p.assign, "Assign to me")+sFaint.Render(" (now: "+t.With()+")"))
 	}
 	lines = append(lines, "", sMagenta.Reverse(true).Bold(true).Render(" Launch ⏎ "))
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, inner, "…")
 	}
-	if len(lines) > height-2 {
-		lines = lines[:max(1, height-2)]
-	}
-	return box(lines, panelWidth)
+	return lines
 }
 
 // shortHome replaces the home folder with ~.

@@ -176,12 +176,12 @@ func TestStartPanelForIssue(t *testing.T) {
 		}
 	}
 	out := plain(e)
-	for _, want := range []string{"shop#42 Fix checkout", "Repo", "shop", "new tab in session shop"} {
+	for _, want := range []string{"shop#42 Fix checkout", "Repo", "shop", "shop › new tab"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("panel missing %q:\n%s", want, out)
 		}
 	}
-	e.press("right", "ctrl+s") // checkout
+	e.press("ctrl+s") // checkout, the default
 	want := "new-session shop | /r/shop | shop#42 Fix checkout | claude Take an issue #42"
 	if len(e.rex.calls) == 0 || e.rex.calls[0] != want {
 		t.Fatalf("rex calls:\n%s\nwant:\n%s", strings.Join(e.rex.calls, "\n"), want)
@@ -199,7 +199,7 @@ func TestStartPanelForIssueWithoutClone(t *testing.T) {
 	if e.app.mode != modeStart || !strings.Contains(plain(e), "no local clone of acme/other in repo_roots") || len(e.rex.calls) != 0 {
 		t.Fatalf("worktree launch must fail: mode %v calls %v", e.app.mode, e.rex.calls)
 	}
-	e.press("left", "ctrl+s") // scratch still works, in a safe folder
+	e.press("right", "ctrl+s") // scratch still works, in a safe folder
 	if len(e.rex.calls) == 0 || !strings.Contains(e.rex.calls[0], "/other-5-elsewhere |") {
 		t.Fatalf("rex calls: %v", e.rex.calls)
 	}

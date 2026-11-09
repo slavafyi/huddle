@@ -34,13 +34,13 @@ func TestPanelHasNoKeyHints(t *testing.T) {
 			t.Errorf("panel shows %q:\n%s", hint, out)
 		}
 	}
-	for _, label := range []string{"Workspace", "Repo", "Branch", "Agent", "Prompt", "Launch ⏎"} {
+	for _, label := range []string{"Workspace", "Repo", "AGENT", "PROMPT", "Launch ⏎"} {
 		if !strings.Contains(out, label) {
 			t.Errorf("panel missing %q", label)
 		}
 	}
 	e.press("tab", "s", "u", "b")
-	if !strings.Contains(plain(e), `Repo · "sub"`) {
+	if !strings.Contains(plain(e), `Repo      "sub"▏`) {
 		t.Errorf("filter not shown:\n%s", plain(e))
 	}
 }
@@ -72,7 +72,7 @@ func TestQuestionMarkIsTextInPanel(t *testing.T) {
 	e := newEnv(t)
 	e.load(t)
 	selectTask(t, e, "t2")
-	e.press("enter", "tab", "tab", "tab", "tab", "?") // → prompt
+	e.press("enter", "tab", "tab", "tab", "?") // → prompt (checkout: workspace, repo, agent, prompt)
 	if e.app.mode != modeStart || !strings.HasSuffix(e.app.start.prompt, "?") {
 		t.Errorf("mode=%v prompt=%q", e.app.mode, e.app.start.prompt)
 	}

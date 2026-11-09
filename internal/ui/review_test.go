@@ -154,7 +154,7 @@ func TestPanelReopensAfterLaunchError(t *testing.T) {
 	e := newEnv(t)
 	e.load(t)
 	selectTask(t, e, "t2")
-	e.press("enter", "tab", "s", "u", "b") // filter repos
+	e.press("enter", "left", "tab", "s", "u", "b") // worktree, filter repos
 	e.runner.Responses = append(e.runner.Responses, runResp("git -C /r/snowcap-subscriptions fetch", errors.New("offline")))
 	e.press("ctrl+s")
 	if e.app.mode != modeStart || e.app.start == nil || e.app.start.repoFilter != "sub" {
@@ -242,7 +242,7 @@ func TestFailedLaunchReopensOnlyItsOwnPanel(t *testing.T) {
 	e.runner.Responses = []run.Response{{Match: "git -C /r/snowcap fetch", Err: errors.New("offline")}}
 	e.load(t)
 	selectTask(t, e, "t2") // A: worktree in snowcap, will fail
-	e.press("enter")
+	e.press("enter", "left")
 	_, launchA := e.app.Update(key("ctrl+s"))
 	selectTask(t, e, "t4") // B: scratch
 	e.press("enter")
