@@ -51,7 +51,7 @@ type Client interface {
 // GH implements Client with `gh api graphql`. It only reads.
 type GH struct {
 	Runner run.Runner
-	Org    string // "" searches everywhere
+	Orgs   []string // none searches everywhere
 }
 
 const query = `query($mine: String!, $review: String!, $merged: String!) {
@@ -97,8 +97,8 @@ type node struct {
 // the last 30 days.
 func (g *GH) PRs(ctx context.Context, now time.Time) ([]PR, error) {
 	scope := ""
-	if g.Org != "" {
-		scope = " org:" + g.Org
+	for _, o := range g.Orgs {
+		scope += " org:" + o
 	}
 	args := []string{"api", "graphql",
 		"-f", "query=" + query,

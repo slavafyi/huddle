@@ -20,6 +20,7 @@ const (
 	modeStart
 	modeConfirm
 	modeHelp
+	modeProfile
 )
 
 type (

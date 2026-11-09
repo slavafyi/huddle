@@ -30,6 +30,7 @@ var (
 	anywhereKeys = []keyHelp{
 		{"tab / 1–4", "switch view"},
 		{"r", "refresh"},
+		{"P", "switch profile"},
 		{"?", "keys"},
 		{"q", "quit"},
 	}

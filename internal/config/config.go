@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -17,12 +18,9 @@ import (
 
 // Config is the user config from ~/.config/huddle/config.toml.
 type Config struct {
-	WorkspaceID      string              `toml:"workspace_id"`
-	LeadFieldID      string              `toml:"lead_field_id"`
 	RepoRoots        []string            `toml:"repo_roots"`
 	WorktreeRoot     string              `toml:"worktree_root"`
 	ScratchRoot      string              `toml:"scratch_root"`
-	GitHubOrg        string              `toml:"github_org"`
 	BranchTemplate   string              `toml:"branch_template"`
 	PromptTemplate   string              `toml:"prompt_template"`
 	ScratchTypes     []string            `toml:"scratch_task_types"`
@@ -30,6 +28,43 @@ type Config struct {
 	Agents           map[string][]string `toml:"agents"`
 	Repos            Repos               `toml:"repos"`
 	StatusInProgress string              `toml:"status_in_progress"`
+	Profiles         []Profile           `toml:"-"` // in file order
+}
+
+// Profile is one named world: its sources, GitHub account, cache and state.
+// In the file, each top-level table that is not a reserved one is a profile.
+type Profile struct {
+	Name             string   `toml:"-"`
+	ClickUp          bool     `toml:"clickup"`
+	ClickUpWorkspace string   `toml:"clickup_workspace"`
+	ClickUpLead      string   `toml:"clickup_lead"`
+	GitHubAccount    string   `toml:"github_account"`
+	GitHubOrgs       []string `toml:"github_orgs"`
+	// Overrides of the shared settings.
+	RepoRoots      []string `toml:"repo_roots"`
+	ScratchRoot    string   `toml:"scratch_root"`
+	PromptTemplate string   `toml:"prompt_template"`
+}
+
+// reserved are top-level tables that are shared settings, not profiles.
+var reserved = map[string]bool{"agents": true, "repos": true}
+
+// Summary describes a profile's sources, e.g. "ClickUp · vertexdigital".
+func (p Profile) Summary() string {
+	var parts []string
+	if p.ClickUp {
+		parts = append(parts, "ClickUp")
+	}
+	switch {
+	case len(p.GitHubOrgs) > 0:
+		parts = append(parts, strings.Join(p.GitHubOrgs, ", "))
+	case !p.ClickUp:
+		parts = append(parts, "GitHub")
+		if p.GitHubAccount != "" {
+			parts = append(parts, p.GitHubAccount)
+		}
+	}
+	return strings.Join(parts, " · ")
 }
 
 // Repos holds per-repo settings, keyed by repo folder name.
@@ -73,7 +108,11 @@ func Load(path string) (Config, error) {
 	c := Default()
 	agents := c.Agents
 	c.Agents = nil
-	if _, err := toml.DecodeFile(path, &c); err != nil && !errors.Is(err, os.ErrNotExist) {
+	data, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return c, fmt.Errorf("read config %s: %w", path, err)
+	}
+	if err := decode(string(data), &c); err != nil {
 		return c, fmt.Errorf("read config %s: %w", path, err)
 	}
 	for name, argv := range agents {
@@ -84,27 +123,143 @@ func Load(path string) (Config, error) {
 			c.Agents[name] = argv
 		}
 	}
-	for i, r := range c.RepoRoots {
-		c.RepoRoots[i] = ExpandHome(r)
-	}
+	c.RepoRoots = expandAll(c.RepoRoots)
 	c.WorktreeRoot = ExpandHome(c.WorktreeRoot)
 	c.ScratchRoot = ExpandHome(c.ScratchRoot)
+	for i := range c.Profiles {
+		c.Profiles[i].RepoRoots = expandAll(c.Profiles[i].RepoRoots)
+		c.Profiles[i].ScratchRoot = ExpandHome(c.Profiles[i].ScratchRoot)
+	}
 	return c, nil
 }
 
-// Validate reports settings that must be set in the file.
-func (c Config) Validate() error {
-	var missing []string
-	if c.WorkspaceID == "" {
-		missing = append(missing, "workspace_id")
+// decode reads the shared settings into c, and each other top-level table
+// into c.Profiles in file order. Unknown settings are errors.
+func decode(data string, c *Config) error {
+	md, err := toml.Decode(data, c)
+	if err != nil {
+		return err
 	}
-	if c.LeadFieldID == "" {
-		missing = append(missing, "lead_field_id")
+	var tables map[string]toml.Primitive
+	pmd, err := toml.Decode(data, &tables)
+	if err != nil {
+		return err
 	}
-	if len(missing) > 0 {
-		return fmt.Errorf("set %s in %s", strings.Join(missing, " and "), Path())
+	var unknown []string
+	for _, k := range md.Keys() {
+		if len(k) != 1 || reserved[k[0]] {
+			continue
+		}
+		if md.Type(k[0]) != "Hash" {
+			if slices.ContainsFunc(md.Undecoded(), func(u toml.Key) bool { return u.String() == k.String() }) {
+				unknown = append(unknown, k.String())
+			}
+			continue
+		}
+		p := Profile{Name: k[0]}
+		if err := pmd.PrimitiveDecode(tables[k[0]], &p); err != nil {
+			return fmt.Errorf("[%s]: %w", k[0], err)
+		}
+		c.Profiles = append(c.Profiles, p)
+	}
+	for _, k := range pmd.Undecoded() {
+		if len(k) > 1 && !reserved[k[0]] {
+			unknown = append(unknown, k.String())
+		}
+	}
+	if len(unknown) > 0 {
+		return fmt.Errorf("unknown setting %s", strings.Join(unknown, ", "))
 	}
 	return nil
+}
+
+func expandAll(paths []string) []string {
+	for i, p := range paths {
+		paths[i] = ExpandHome(p)
+	}
+	return paths
+}
+
+// Validate reports settings that must be fixed in the file.
+func (c Config) Validate() error {
+	if len(c.Profiles) == 0 {
+		return fmt.Errorf("no profiles in %s: add a table such as [work] (see SPEC.md §5)", Path())
+	}
+	for _, p := range c.Profiles {
+		if !validName(p.Name) {
+			return fmt.Errorf("profile name %q: use letters, digits, - and _ only", p.Name)
+		}
+		if !p.ClickUp {
+			continue
+		}
+		var missing []string
+		if p.ClickUpWorkspace == "" {
+			missing = append(missing, "clickup_workspace")
+		}
+		if p.ClickUpLead == "" {
+			missing = append(missing, "clickup_lead")
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("set %s in [%s] of %s (finding them automatically is not built yet)",
+				strings.Join(missing, " and "), p.Name, Path())
+		}
+	}
+	return nil
+}
+
+// validName reports whether a profile name is safe to use as a folder name.
+func validName(n string) bool {
+	if n == "" {
+		return false
+	}
+	for _, r := range n {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+// Select picks the profile to start: the -p flag if given, else the last
+// used one if it still exists, else the first in the file.
+func (c Config) Select(flag, last string) (Profile, error) {
+	find := func(name string) (Profile, bool) {
+		for _, p := range c.Profiles {
+			if p.Name == name {
+				return p, true
+			}
+		}
+		return Profile{}, false
+	}
+	if flag != "" {
+		if p, ok := find(flag); ok {
+			return p, nil
+		}
+		var names []string
+		for _, p := range c.Profiles {
+			names = append(names, p.Name)
+		}
+		return Profile{}, fmt.Errorf("no profile %q; profiles: %s", flag, strings.Join(names, ", "))
+	}
+	if p, ok := find(last); ok {
+		return p, nil
+	}
+	return c.Profiles[0], nil
+}
+
+// Use returns the config for a profile: the shared settings with the
+// profile's overrides.
+func (c Config) Use(p Profile) Config {
+	if len(p.RepoRoots) > 0 {
+		c.RepoRoots = p.RepoRoots
+	}
+	if p.ScratchRoot != "" {
+		c.ScratchRoot = p.ScratchRoot
+	}
+	if p.PromptTemplate != "" {
+		c.PromptTemplate = p.PromptTemplate
+	}
+	return c
 }
 
 // BaseBranch returns the configured base branch for a repo, or "" to use the

@@ -134,7 +134,6 @@ type testEnv struct {
 func newEnv(t *testing.T) *testEnv {
 	t.Helper()
 	cfg := config.Default()
-	cfg.WorkspaceID, cfg.LeadFieldID = "77", "lead"
 	dir := t.TempDir()
 	cfg.ScratchRoot = filepath.Join(dir, "research")
 	cfg.WorktreeRoot = filepath.Join(dir, "worktrees")

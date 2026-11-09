@@ -35,7 +35,7 @@ const reply = `{"data": {
 
 func TestPRsParsesAndQueriesOrg(t *testing.T) {
 	f := &run.Fake{Responses: []run.Response{{Match: "gh api graphql", Out: reply}}}
-	g := &GH{Runner: f, Org: "vertexdigital"}
+	g := &GH{Runner: f, Orgs: []string{"vertexdigital", "acme"}}
 	now := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
 	prs, err := g.PRs(context.Background(), now)
 	if err != nil {
@@ -57,9 +57,9 @@ func TestPRsParsesAndQueriesOrg(t *testing.T) {
 	}
 	call := strings.Join(f.Calls(), "\n")
 	for _, want := range []string{
-		"mine=is:pr is:open author:@me archived:false org:vertexdigital",
-		"review=is:pr is:open review-requested:@me archived:false org:vertexdigital",
-		"merged=is:pr is:merged author:@me merged:>=2026-10-10 org:vertexdigital",
+		"mine=is:pr is:open author:@me archived:false org:vertexdigital org:acme",
+		"review=is:pr is:open review-requested:@me archived:false org:vertexdigital org:acme",
+		"merged=is:pr is:merged author:@me merged:>=2026-10-10 org:vertexdigital org:acme",
 	} {
 		if !strings.Contains(call, want) {
 			t.Errorf("query missing %q in %s", want, call)

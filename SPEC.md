@@ -113,7 +113,8 @@ first).
 
 ### 4.6 PRs
 
-My open PRs and review requests in `vertexdigital`, from `gh`. A PR's task is
+My open PRs and review requests in the profile's `github_orgs` (all of
+GitHub when it has none), from `gh`. A PR's task is
 the first known task ID (from the cache, any case, whole word) in its branch
 name, else in its title. Also match ClickUp's own `CU-<clickup id>` form.
 No match → no task.
@@ -134,11 +135,40 @@ go by status name; unknown names are green when done, else faint.
 
 ## 5. Config and files
 
-- Config: `~/.config/huddle/config.toml` (workspace ID, lead field ID, repo
-  roots, worktree root, scratch root `~/code/agency/notes`, GitHub
-  org, branch and prompt templates, agent commands, per-repo base branch).
-- Cache: `~/.cache/huddle/*.json`. State (agent records, client → session,
-  client → recent repos): `~/.local/state/huddle/state.json`.
+- Config: `~/.config/huddle/config.toml`. Shared settings are top-level:
+  repo roots, worktree root, scratch root, branch and prompt templates,
+  agent commands (`[agents]`), per-repo base branch (`[repos.base_branch]`).
+- **Profiles:** every other top-level table is a profile, in file order
+  (`agents` and `repos` are reserved names). A profile is one named world:
+  its sources, GitHub account, cache and state. Only one is shown at a time.
+
+  ```toml
+  [work]
+  clickup           = true               # this profile shows ClickUp tasks
+  clickup_workspace = "1234567"          # required with clickup for now (§14.4 step 4)
+  clickup_lead      = "11111111-…"       # the "Lead Assignee" field
+  github_account    = "slavafyi"         # optional
+  github_orgs       = ["vertexdigital"]  # PRs are searched in these orgs
+
+  [personal]
+  github_account = "slavafyi"
+  ```
+
+  A profile may override `repo_roots`, `scratch_root` and
+  `prompt_template`. Unknown settings, no profiles, a profile name other
+  than letters, digits, `-` and `_`, or a ClickUp profile without
+  workspace and lead are errors at start.
+- **Which profile:** `huddle -p <name>` (an unknown name lists the valid
+  ones); else the last used one (`~/.local/state/huddle/last_profile`);
+  else the first in the file. `P` opens a picker (most recently used first,
+  from `recent_profiles` next to `last_profile`): type to filter, `enter`
+  switches, `1–9` jump, `esc` closes. Switching ends the program and starts
+  it again in the new profile. The header shows `huddle · <profile>`, the
+  window title `Huddle · <profile>`. A profile without sources shows "no
+  sources in this profile" in Today and Tasks; PRs still work.
+- Per profile: cache `~/.cache/huddle/<profile>/cache.json`, state (agent
+  records, client → session, client → recent repos)
+  `~/.local/state/huddle/<profile>/state.json`.
 - Write JSON atomically (temp file + rename).
 - **Token:** env `CLICKUP_API_TOKEN`, else keychain item `huddle-clickup`.
   Never stored in files or logs.
@@ -233,7 +263,7 @@ Live checks (read-only, or throwaway Rex sessions) run with
 Focusing a tab in the Mac app uses the `session.select` client action, so
 Rex **Remote Control** must be on. If it's off, show a hint.
 
-## 14. Next: profiles and GitHub issues (planned, not built)
+## 14. Next: profiles and GitHub issues (planned; profiles built)
 
 Decided 2026-11-10.
 
@@ -241,6 +271,8 @@ Decided 2026-11-10.
 (GitHub issues) without mixing them, with a short config.
 
 ### 14.1 Profiles
+
+Built: see §5.
 
 - A profile is one named world: its sources, GitHub account, cache and
   Rex sessions. Only one profile is shown at a time.
@@ -265,7 +297,7 @@ github_orgs    = ["vertexdigital"]  # GitHub items in these orgs belong here
 github_account = "slavafyi"
 ```
 
-- A profile with `clickup_*` (or a ClickUp token) shows ClickUp tasks.
+- A profile with `clickup = true` shows ClickUp tasks.
 - **GitHub split:** issues and PRs in a profile's `github_orgs` belong to
   that profile. A profile without `github_orgs` gets every other issue
   and PR assigned to or opened by its account (any repo, open-source too).
@@ -296,6 +328,7 @@ github_account = "slavafyi"
 1. **Built.** Common item type; ClickUp behind a source interface (no
    visible change; existing tests stay green). Tasks and agent records are
    keyed by source + ID (state file version 2; older agents are ClickUp).
-2. Profiles in config, header, picker, `-p`; per-profile cache and state.
+2. **Built.** Profiles in config, header, picker, `-p`; per-profile cache
+   and state (§5). `github_account` is read but not used yet (step 3).
 3. GitHub issues source.
 4. ClickUp auto-detect for workspace and lead field.

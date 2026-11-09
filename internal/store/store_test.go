@@ -3,6 +3,7 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -57,5 +58,44 @@ func TestWriterSkipsOlderGenerations(t *testing.T) {
 	data, _ := os.ReadFile(p)
 	if string(data) != `{"v":2}` {
 		t.Errorf("older snapshot overwrote newer: %s", data)
+	}
+}
+
+func TestProfilePaths(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", "/c")
+	t.Setenv("XDG_STATE_HOME", "/s")
+	if got := CachePath("work"); got != "/c/huddle/work/cache.json" {
+		t.Errorf("cache = %q", got)
+	}
+	if got := StatePath("work"); got != "/s/huddle/work/state.json" {
+		t.Errorf("state = %q", got)
+	}
+}
+
+func TestRememberProfile(t *testing.T) {
+	dir := t.TempDir()
+	if got := LastProfile(dir); got != "" {
+		t.Errorf("last = %q before any use", got)
+	}
+	for _, p := range []string{"a", "b", "c", "a"} {
+		if err := RememberProfile(dir, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := LastProfile(dir); got != "a" {
+		t.Errorf("last = %q", got)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, "last_profile"))
+	if string(data) != "a\n" {
+		t.Errorf("last_profile file = %q", data)
+	}
+	if got := RecentProfiles(dir); !slices.Equal(got, []string{"a", "c", "b"}) {
+		t.Errorf("recent = %v", got)
+	}
+	for i := range 20 {
+		RememberProfile(dir, string(rune('d'+i)))
+	}
+	if got := RecentProfiles(dir); len(got) != maxRecentProfiles {
+		t.Errorf("recent not capped: %v", got)
 	}
 }

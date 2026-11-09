@@ -46,7 +46,10 @@ const (
 // Deps are the services the UI uses.
 type Deps struct {
 	Config    config.Config
-	Sources   []task.Source // where tasks come from
+	Profile   string           // the current profile
+	Profiles  []config.Profile // all profiles, in file order
+	Recent    []string         // recently used profiles, most recent first
+	Sources   []task.Source    // where tasks come from
 	GitHub    github.Client
 	Rex       rex.Client
 	Runner    run.Runner
@@ -104,6 +107,9 @@ type App struct {
 	input       string
 	commentTask string // task.Ref
 	start       *startPanel
+
+	profilePicker profilePicker
+	switchTo      string // profile to start next, set when the picker ends the program
 }
 
 // Messages.
@@ -144,6 +150,10 @@ func NewApp(d Deps) *App {
 		ops: map[uint64]*op{}, launching: map[string]bool{}, lastStart: map[string]*startPanel{}, writer: &store.Writer{}}
 	for _, s := range d.Sources {
 		a.rules[s.Name()] = s.Rules()
+	}
+	if len(d.Sources) == 0 {
+		a.today.list.empty = "no sources in this profile"
+		a.tasks.list.empty = "no sources in this profile"
 	}
 	a.state = d.State
 	a.applyCache(d.Cache)
@@ -354,6 +364,8 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return a.startKey(msg)
 	case modeConfirm:
 		return a.confirmKey(k)
+	case modeProfile:
+		return a.profileKey(msg)
 	}
 	switch k {
 	case "?":
@@ -361,6 +373,9 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "q", "ctrl+c":
 		return tea.Quit
+	case "P":
+		a.openProfilePicker()
+		return nil
 	case "1", "2", "3", "4":
 		a.tab = Tab(k[0] - '1')
 		a.flash = ""
@@ -527,6 +542,9 @@ func (a *App) View() tea.View {
 	v := tea.NewView(a.Render())
 	v.AltScreen = true
 	v.WindowTitle = "Huddle"
+	if a.deps.Profile != "" {
+		v.WindowTitle += " · " + a.deps.Profile
+	}
 	return v
 }
 
@@ -573,6 +591,8 @@ func (a *App) Render() string {
 		return overlay(b.String(), a.renderPicker(), max(2, (a.width-44)/2), 2)
 	case modeStart:
 		return overlay(b.String(), a.renderStart(a.height-2), max(0, a.width-panelWidth), 2)
+	case modeProfile:
+		return overlay(b.String(), a.renderProfilePicker(), max(2, (a.width-52)/2), 2)
 	}
 	return b.String()
 }
@@ -655,6 +675,9 @@ func (a *App) tabBar() string {
 	}
 	left := strings.Join(parts, "   ")
 	right := a.counters() + a.syncLabel() + "  " + sBold.Render("huddle")
+	if a.deps.Profile != "" {
+		right += sFaint.Render(" · ") + sBold.Render(a.deps.Profile)
+	}
 	gap := a.width - ansi.StringWidth(left) - ansi.StringWidth(right)
 	return left + strings.Repeat(" ", max(1, gap)) + right
 }
@@ -662,6 +685,8 @@ func (a *App) tabBar() string {
 func (a *App) syncLabel() string {
 	at := a.cache.TasksSyncedAt
 	switch {
+	case len(a.deps.Sources) == 0:
+		return ""
 	case a.syncErr != nil && !at.IsZero():
 		return sRed.Render("offline · cached " + ago(a.now().Sub(at)) + " ago")
 	case a.syncErr != nil:

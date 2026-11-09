@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +16,7 @@ func TestLivePRs(t *testing.T) {
 	if os.Getenv("HUDDLE_GH_LIVE") != "1" {
 		t.Skip("set HUDDLE_GH_LIVE=1 to query GitHub (read-only)")
 	}
-	g := &GH{Runner: run.Exec{}, Org: os.Getenv("HUDDLE_GH_ORG")}
+	g := &GH{Runner: run.Exec{}, Orgs: strings.Fields(os.Getenv("HUDDLE_GH_ORG"))}
 	prs, err := g.PRs(context.Background(), time.Now())
 	if err != nil {
 		t.Fatal(err)
@@ -24,7 +25,7 @@ func TestLivePRs(t *testing.T) {
 	for _, p := range prs {
 		counts[p.Kind]++
 	}
-	t.Logf("org=%q mine=%d review=%d merged=%d", g.Org, counts[Mine], counts[ReviewRequested], counts[Merged])
+	t.Logf("orgs=%q mine=%d review=%d merged=%d", g.Orgs, counts[Mine], counts[ReviewRequested], counts[Merged])
 	for _, p := range prs[:min(3, len(prs))] {
 		t.Logf("  #%d %s %s ci=%s review=%s", p.Number, p.Repo, p.Branch, p.CI, p.Review)
 	}

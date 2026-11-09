@@ -26,8 +26,8 @@ type Cache struct {
 	PRsAt         time.Time        `json:"prs_at,omitzero"`
 }
 
-// CachePath is the default cache file.
-func CachePath() string { return filepath.Join(CacheDir(), "cache.json") }
+// CachePath is a profile's cache file.
+func CachePath(profile string) string { return filepath.Join(CacheDir(), profile, "cache.json") }
 
-// StatePath is the default state file.
-func StatePath() string { return filepath.Join(StateDir(), "state.json") }
+// StatePath is a profile's state file.
+func StatePath(profile string) string { return filepath.Join(StateDir(), profile, "state.json") }

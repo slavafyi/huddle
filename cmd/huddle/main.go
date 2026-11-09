@@ -4,8 +4,10 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -20,13 +22,15 @@ import (
 )
 
 func main() {
-	if err := runApp(); err != nil {
+	profile := flag.String("p", "", "start in this profile (default: the last used one)")
+	flag.Parse()
+	if err := runApp(*profile); err != nil {
 		fmt.Fprintln(os.Stderr, "huddle:", err)
 		os.Exit(1)
 	}
 }
 
-func runApp() error {
+func runApp(flagProfile string) error {
 	cfg, err := config.Load(config.Path())
 	if err != nil {
 		return err
@@ -34,45 +38,79 @@ func runApp() error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
-	runner := run.Exec{}
-	token, err := config.Token(context.Background(), runner)
+	p, err := cfg.Select(flagProfile, store.LastProfile(store.StateDir()))
 	if err != nil {
 		return err
 	}
-	// Child processes (rex, gh, git, and through rex the agent tabs) must
-	// not inherit the token.
+	// The token is read from the environment once, then removed from it:
+	// child processes (rex, gh, git, and through rex the agent tabs) must
+	// not inherit it. Without it, config.Token falls back to the keychain.
+	token := strings.TrimSpace(os.Getenv("CLICKUP_API_TOKEN"))
 	os.Unsetenv("CLICKUP_API_TOKEN")
+	runner := run.Exec{}
+	for {
+		if p.ClickUp && token == "" {
+			if token, err = config.Token(context.Background(), runner); err != nil {
+				return err
+			}
+		}
+		next, err := runProfile(cfg, p, token, runner)
+		if err != nil || next == "" {
+			return err
+		}
+		if p, err = cfg.Select(next, ""); err != nil {
+			return err
+		}
+	}
+}
+
+// runProfile runs the app in one profile until it quits. It returns the
+// profile to switch to, or "" when the user quit.
+func runProfile(cfg config.Config, p config.Profile, token string, runner run.Runner) (string, error) {
+	if err := store.RememberProfile(store.StateDir(), p.Name); err != nil {
+		return "", err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // stops the rex event stream on quit
+	defer cancel() // stops the rex event stream when the app ends
 	var cache store.Cache
-	if err := store.Load(store.CachePath(), &cache); err != nil || cache.Version != store.CacheVersion {
+	if err := store.Load(store.CachePath(p.Name), &cache); err != nil || cache.Version != store.CacheVersion {
 		cache = store.Cache{} // unreadable or old cache: start fresh
 	}
 	var state store.State
-	if err := store.Load(store.StatePath(), &state); err != nil {
-		return fmt.Errorf("%w (fix or move the file; it links tasks to Rex tabs)", err)
+	if err := store.Load(store.StatePath(p.Name), &state); err != nil {
+		return "", fmt.Errorf("%w (fix or move the file; it links tasks to Rex tabs)", err)
 	}
 	state.Migrate()
-	deps := ui.Deps{
-		Config: cfg,
-		Sources: []task.Source{&clickup.Source{
+	pcfg := cfg.Use(p)
+	var sources []task.Source
+	if p.ClickUp {
+		sources = append(sources, &clickup.Source{
 			Client: &clickup.HTTP{
 				BaseURL: clickup.DefaultBaseURL, Token: token,
-				TeamID: cfg.WorkspaceID, LeadFieldID: cfg.LeadFieldID,
+				TeamID: p.ClickUpWorkspace, LeadFieldID: p.ClickUpLead,
 			},
-			InProgress: cfg.StatusInProgress,
-		}},
-		GitHub:    &github.GH{Runner: runner, Org: cfg.GitHubOrg},
+			InProgress: pcfg.StatusInProgress,
+		})
+	}
+	app := ui.NewApp(ui.Deps{
+		Config:    pcfg,
+		Profile:   p.Name,
+		Profiles:  cfg.Profiles,
+		Recent:    store.RecentProfiles(store.StateDir()),
+		Sources:   sources,
+		GitHub:    &github.GH{Runner: runner, Orgs: p.GitHubOrgs},
 		Rex:       &rex.CLI{Runner: runner},
 		Runner:    runner,
 		Cache:     cache,
 		State:     state,
-		CachePath: store.CachePath(),
-		StatePath: store.StatePath(),
+		CachePath: store.CachePath(p.Name),
+		StatePath: store.StatePath(p.Name),
 		Watch:     func(context.Context) (<-chan rex.Event, error) { return rex.Watch(ctx) },
 
 		HomeSession: os.Getenv("REX_SESSION"),
+	})
+	if _, err := tea.NewProgram(app).Run(); err != nil {
+		return "", err
 	}
-	_, err = tea.NewProgram(ui.NewApp(deps)).Run()
-	return err
+	return app.SwitchTo(), nil
 }
