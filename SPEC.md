@@ -476,34 +476,41 @@ them into Today (the "Open" group) is noise.
 2. **Built.** Tabs per source and Today = main source (§4.2). Cache
    version 4 (issue labels). Issues show UPDATED age, not created age.
 
-## 16. Start panel, more agents, profile toggle (done; steps 1–3 built)
+## 16. Start panel, more agents, profile toggle (step 4 planned)
 
-Decided 2026-11-09. §4.4 holds
-the defaults; the layout below is the current behavior.
+Decided 2026-11-09. §4.4 holds the
+defaults; the layout below is the current behavior.
 
 ### 16.1 Start panel
 
+Replaces an earlier, busier layout.
+
 - Box titled `Start`, 54 columns. Top: `{id} {title}` (title bold,
   wrapped under itself, up to 3 lines, `…` only past that), then
-  `{project} · {status}`.
-- Three sections, each a faint rule `WHERE ───`, `AGENT ───`,
-  `PROMPT ───`, with a blank line before each:
-  - **WHERE:** `Rex  {session} › new tab` (faint "· session created" when
-    missing) first, then rows with a 10-column label: `Workspace` (radios
-    on the same row), `Repo` (current repo, faint `+N`;
-    while focused, a list of up to 4 matches opens under it),
-    `Branch` (worktree only), `Folder` (scratch only).
-  - **AGENT:** all agents as radios, 3 per row.
-  - **PROMPT:** a thin box (faint border, normal while focused), 4 lines
-    tall, wraps; longer text scrolls to keep the end. Under it the
-    left-aligned `[x] Move to …` / `[x] Assign to me` rows.
-- Bottom: `Launch ⏎`. No key hints (they are in `?`).
-- Short terminal: the prompt box shrinks (down to 1 line), then blank
-  lines go; `Launch ⏎` always shows. Long folder names and the "no local
-  clone" message get their own line; a long branch shows its end.
+  `{project} · {status}`, a blank line, `Rex  {session} › new tab`
+  (faint "· session created" when missing), a blank line.
+- Fields top to bottom, a blank line between them, each a label line
+  (`› Label` bold while focused, else faint) with its value under it,
+  indented 2:
+  - **Workspace:** radios `○ worktree  ● checkout  ○ scratch`.
+  - **Repo** (picker): up to 3 repos, the selected one bold with `›`, then
+    faint `+N more · type to filter` (just `+N more` while filtering;
+    red `no repo matches` when none). What you type shows after the label
+    with no quotes: `› Repo  snow▏`. Fixed repo (GitHub issue): just the
+    name, or the red "no local clone" message.
+  - **Branch** (worktree only): the full name, wrapped after `-` over as
+    many lines as needed (never cut), then a dotted line `┄┄┄`.
+  - **Folder** (scratch only): faint parent folder, then the folder name.
+  - **Agent:** radios, 3 per row.
+  - **Prompt:** wrapped text, 4 lines tall, then a dotted line (normal
+    color while focused, else faint); a longer prompt keeps its end in
+    view.
+  - `[x] Move to …` / `[x] Assign to me` as label-style lines.
+- Bottom: `Launch ⏎`.
+- Short terminal: the prompt shrinks (down to 1 line), then blank lines
+  go; `Launch ⏎` always shows.
 - Keys unchanged: `tab` / `shift+tab` move, `space` / `←→` change,
-  `enter` launches.
-- Workspace default: **checkout** (was worktree); scratch rules unchanged.
+  `enter` launches. Workspace default: **checkout**.
 
 ### 16.2 Prompts
 
@@ -535,4 +542,5 @@ other profile". `P` stays for the picker. Listed in `?`.
 
 1. **Built.** Agents and prompts (§16.2–16.3).
 2. **Built.** Profile toggle (§16.4); `?` says "last profile".
-3. **Built.** First Start panel and checkout default (§16.1).
+3. **Built.** First Start panel and checkout default.
+4. Current Start panel (§16.1), replacing the first one.
