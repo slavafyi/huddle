@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/slavafyi/huddle/internal/config"
 )
@@ -97,7 +98,7 @@ func TestProfilePickerNumberJumps(t *testing.T) {
 func TestProfilePickerCurrentProfileJustCloses(t *testing.T) {
 	e := withProfiles(t)
 	e.press("P")
-	_, cmd := e.app.Update(key("enter"))
+	_, cmd := e.app.Update(key("1"))
 	if e.app.SwitchTo() != "" || cmd != nil || e.app.mode != modeNormal {
 		t.Errorf("switch = %q mode=%v", e.app.SwitchTo(), e.app.mode)
 	}
@@ -140,5 +141,41 @@ func TestProfilePickerFitsAt80Columns(t *testing.T) {
 	}
 	if strings.Contains(plain(e), "● 2 personal") {
 		t.Error("only the current profile is marked")
+	}
+}
+
+// The picker has fixed columns (mark, number, name, summary on the right)
+// and a reversed cursor row that starts on the next profile.
+func TestProfilePickerLayout(t *testing.T) {
+	e := withProfiles(t)
+	e.press("P")
+	if e.app.profilePicker.cursor != 1 {
+		t.Errorf("cursor = %d, want the next profile", e.app.profilePicker.cursor)
+	}
+	lines := e.app.renderProfilePicker()
+	var rows []string
+	for _, l := range lines {
+		if strings.Contains(l, "work") || strings.Contains(l, "personal") || strings.Contains(l, "oss") {
+			rows = append(rows, l)
+		}
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows: %q", rows)
+	}
+	if !strings.Contains(rows[1], "7m") || strings.Contains(rows[0], "7m") {
+		t.Errorf("cursor row not reversed: %q", rows)
+	}
+	// col is the display column where s starts in row r.
+	col := func(r, s string) int { return ansi.StringWidth(r[:strings.Index(r, s)]) }
+	p := make([]string, len(rows))
+	for i, r := range rows {
+		p[i] = ansi.Strip(r)
+	}
+	if col(p[0], "1 work") != col(p[1], "2 personal") || col(p[1], "2 personal") != col(p[2], "3 oss") {
+		t.Errorf("number and name columns not aligned: %q", p)
+	}
+	end := func(r, s string) int { return col(r, s) + ansi.StringWidth(s) }
+	if end(p[0], "vertexdigital") != end(p[1], "slavafyi") {
+		t.Errorf("summaries not right-aligned: %q", p)
 	}
 }

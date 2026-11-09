@@ -178,6 +178,9 @@ source's tasks; a source that fails keeps its cached tasks.
 Only the 16 ANSI colors plus bold / faint / reverse, so the terminal theme
 (light or dark) decides the real colors. No hex or 256 colors. Status colors
 go by status name; unknown names are green when done, else faint.
+Meaning never depends on blue, yellow, magenta or cyan alone (they are
+grey in some themes, e.g. koda-dark): the active tab and filter are bold
+(inactive faint), the cursor row is reverse.
 
 ## 5. Config and files
 
@@ -233,7 +236,9 @@ go by status name; unknown names are green when done, else faint.
 - **Which profile:** `huddle -p <name>` (an unknown name lists the valid
   ones); else the last used one (`~/.local/state/huddle/last_profile`);
   else the first in the file. `P` opens a picker (most recently used first,
-  from `recent_profiles` next to `last_profile`): type to filter, `enter`
+  from `recent_profiles` next to `last_profile`; fixed columns: green ● on
+  the current profile, number, name, summary on the right; the reversed
+  cursor starts on the next profile): type to filter, `enter`
   switches, `1–9` jump, `esc` closes. Switching ends the program and starts
   it again in the new profile. The header shows `huddle · <profile>`, the
   window title `Huddle · <profile>`. A profile without sources shows "no
@@ -412,7 +417,7 @@ Built: see §4.1–§4.6 (decided details there override this sketch).
    for issues and PRs (§4.1–§4.6, §5). Cache version 3.
 4. **Built.** ClickUp auto-detect for workspace and lead field (§5).
 
-## 15. Views per source and theme fixes (planned)
+## 15. Views per source and theme fixes (step 1 built)
 
 Decided 2026-11-09. When built, fold into §4, §5 and §4.8.
 
@@ -454,6 +459,6 @@ them into Today (the "Open" group) is noise.
 
 ### 15.4 Build order
 
-1. Theme fixes (§15.3), with tests on the rendered tab bar and picker.
+1. **Built.** Theme fixes (§15.3), folded into §4.8 and §5.
 2. Tabs per source and Today = main source (§15.1–15.2); fold §15 into
    §4 / §5.

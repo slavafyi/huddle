@@ -16,7 +16,7 @@ var (
 	sBlue    = lipgloss.NewStyle().Foreground(lipgloss.Blue)
 	sMagenta = lipgloss.NewStyle().Foreground(lipgloss.Magenta)
 	sCyan    = lipgloss.NewStyle().Foreground(lipgloss.Cyan)
-	sTabOn   = lipgloss.NewStyle().Foreground(lipgloss.Blue).Bold(true)
+	sTabOn   = sBold // not a color: blue is grey in some themes
 )
 
 // statusStyle returns the style for a status name. Names it doesn't know

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/slavafyi/huddle/internal/config"
 )
@@ -47,6 +48,9 @@ func recentFirst(profiles []config.Profile, recent []string) []config.Profile {
 
 func (a *App) openProfilePicker() {
 	a.profilePicker = profilePicker{profiles: recentFirst(a.deps.Profiles, a.deps.Recent)}
+	if len(a.profilePicker.profiles) > 1 && a.profilePicker.profiles[0].Name == a.deps.Profile {
+		a.profilePicker.cursor = 1 // start on the profile you most likely want
+	}
 	a.mode = modeProfile
 }
 
@@ -109,20 +113,26 @@ func (a *App) renderProfilePicker() []string {
 	if len(shown) == 0 {
 		lines = append(lines, sFaint.Render("no match"))
 	}
+	// Fixed columns: current mark, number, name, summary on the right. The
+	// cursor row is reversed like list rows.
+	const width = 52
+	inner := width - 4
 	for i, pr := range shown {
 		mark := "  "
-		if i == p.cursor {
-			mark = "› "
-		}
-		cur := "  "
 		if pr.Name == a.deps.Profile {
-			cur = sGreen.Render("●") + " "
+			mark = "● "
 		}
-		line := mark + cur + fmt.Sprintf("%d %-12s ", i+1, pr.Name) + sFaint.Render(pr.Summary())
+		left := fmt.Sprintf("%d %-12s", i+1, pr.Name)
+		sum := ansi.Truncate(pr.Summary(), inner-len(mark)-ansi.StringWidth(left)-1, "…")
+		gap := strings.Repeat(" ", max(1, inner-len([]rune(mark))-ansi.StringWidth(left)-ansi.StringWidth(sum)))
 		if i == p.cursor {
-			line = sBold.Render(line)
+			lines = append(lines, sSel.Bold(true).Render(mark+left+gap+sum))
+			continue
 		}
-		lines = append(lines, line)
+		if mark != "  " {
+			mark = sGreen.Render("●") + " "
+		}
+		lines = append(lines, mark+left+gap+sFaint.Render(sum))
 	}
-	return box(lines, 52)
+	return box(lines, width)
 }
