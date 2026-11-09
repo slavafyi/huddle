@@ -62,6 +62,7 @@ type App struct {
 	syncErr      error
 
 	tasks *taskView
+	today *todayView
 
 	mode        mode
 	picker      picker
@@ -92,7 +93,7 @@ func NewApp(d Deps) *App {
 	if d.Runner == nil {
 		d.Runner = run.Exec{}
 	}
-	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView(), statuses: map[string][]clickup.Status{}}
+	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView(), today: newTodayView(), statuses: map[string][]clickup.Status{}}
 	a.applyCache(d.Cache)
 	return a
 }
@@ -108,6 +109,7 @@ func (a *App) applyCache(c store.Cache) {
 func (a *App) rebuild() {
 	now := a.now()
 	a.tasks.rebuild(a.cache.Tasks, a.cache.Me.ID, now, agentLookup{})
+	a.today.rebuild(a.cache.Tasks, a.cache.Me.ID, now, agentLookup{})
 }
 
 // Init loads tasks and starts the refresh timer.
@@ -234,6 +236,21 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch a.tab {
 	case TabTasks:
 		return a.taskKey(k)
+	case TabToday:
+		return a.listKey(&a.today.list, k)
+	}
+	return nil
+}
+
+// listKey moves the cursor in l, or runs a task action.
+func (a *App) listKey(l *list, k string) tea.Cmd {
+	switch k {
+	case "j", "down":
+		l.move(1)
+	case "k", "up":
+		l.move(-1)
+	default:
+		return a.taskAction(k)
 	}
 	return nil
 }
@@ -283,6 +300,8 @@ func (a *App) selectedTask() (clickup.Task, bool) {
 	switch a.tab {
 	case TabTasks:
 		r, ok = a.tasks.list.selected()
+	case TabToday:
+		r, ok = a.today.list.selected()
 	}
 	if !ok {
 		return clickup.Task{}, false
@@ -374,6 +393,13 @@ func pad(s string, h int) string {
 func (a *App) viewParts() (sub string, body func(h int) string, detail []string, keys string) {
 	me, now := a.cache.Me.ID, a.now()
 	switch a.tab {
+	case TabToday:
+		sub = a.today.subHeader(now)
+		body = func(h int) string { return a.today.list.render(a.width, h) }
+		if t, ok := a.selectedTask(); ok {
+			detail = taskDetail(t, me, now)
+		}
+		keys = "j/k move · s status · c comment · a assign · o open · r refresh · 1–4 views · q quit"
 	case TabTasks:
 		sub = a.tasks.subHeader(a.cache.Tasks, me)
 		body = func(h int) string { return a.tasks.list.render(a.width, h) }
@@ -422,3 +448,4 @@ func (a *App) syncLabel() string {
 type agentLookup struct{}
 
 func (agentLookup) badge(string) string { return "" }
+func (agentLookup) state(string) string { return "" }
