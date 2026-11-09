@@ -3,6 +3,8 @@ package ui
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Blue is grey in some themes (koda-dark), so the active tab and filter
@@ -41,5 +43,24 @@ func TestSameSelectionEverywhere(t *testing.T) {
 	e.press("enter", "tab") // → repo list
 	if out := strings.Join(e.app.renderStart(40), "\n"); strings.Contains(out, selBG) || !strings.Contains(out, "› snowcap") {
 		t.Errorf("panel repo list: %q", out)
+	}
+}
+
+// The status picker matches the profile picker: number first, no › column,
+// no hint line; the cursor is the grey row.
+func TestStatusPickerLayout(t *testing.T) {
+	e := newEnv(t)
+	e.cu.statuses = listStatuses
+	e.load(t)
+	e.press("2", "s")
+	lines := e.app.renderPicker()
+	for _, l := range lines[1 : len(lines)-1] {
+		p := ansi.Strip(l)
+		if strings.Contains(p, "›") || strings.Contains(p, "enter apply") {
+			t.Errorf("picker line %q", p)
+		}
+		if body := strings.TrimPrefix(p, "│ "); strings.Contains(body, "■") && (body[0] < '1' || body[0] > '9') {
+			t.Errorf("row must start with its number: %q", p)
+		}
 	}
 }

@@ -197,12 +197,9 @@ func (a *App) onWrite(m writeMsg) tea.Cmd {
 func (a *App) renderPicker() []string {
 	t, _ := a.taskByRef(a.picker.ref)
 	lines := []string{sBold.Render("Status") + sFaint.Render(" · "+t.Key)}
+	// Like the profile picker: number first, the cursor is the grey row.
 	for i, s := range a.picker.statuses {
-		mark := "  "
-		if i == a.picker.cursor {
-			mark = "› "
-		}
-		line := fmt.Sprintf("%s%d %s %s", mark, i+1, statusStyle(s.Name, s.Done).Render("■"), s.Name)
+		line := fmt.Sprintf("%d %s %s", i+1, statusStyle(s.Name, s.Done).Render("■"), s.Name)
 		if s.Name == t.Status {
 			line += sFaint.Render(" (current)")
 		}
@@ -211,6 +208,5 @@ func (a *App) renderPicker() []string {
 		}
 		lines = append(lines, line)
 	}
-	lines = append(lines, sFaint.Render("enter apply · 1–9 pick · esc cancel"))
 	return box(lines, 44)
 }
