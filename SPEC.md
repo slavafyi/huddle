@@ -526,7 +526,9 @@ Replaces an earlier, busier layout.
   the row above / below. Checkboxes: `space` or any arrow toggles. Repo:
   `↑↓` move in the list (all repos, or the matches once you type); every
   other key, `space` too, goes into the filter. Branch and Prompt: text;
-  arrows do nothing. `enter` launches. Workspace default: **checkout**.
+  arrows do nothing. `ctrl+n` / `ctrl+p` act like `↓` / `↑` here and in
+  every list (Today, Tasks, Issues, PRs, Agents) and picker. `enter`
+  launches. Workspace default: **checkout**.
 
 ### 16.2 Prompts
 
