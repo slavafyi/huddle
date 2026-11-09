@@ -33,6 +33,7 @@ type list struct {
 	sections []section
 	sel      int
 	empty    string
+	touched  bool // the user moved the cursor; keep it on the same row
 }
 
 func (l *list) rows() []row {
@@ -43,14 +44,19 @@ func (l *list) rows() []row {
 	return out
 }
 
-// setSections replaces the content and keeps the selected key if it is
-// still there.
+// setSections replaces the content. Once the user has moved the cursor, it
+// stays on the same row if that row is still there; before that it stays on
+// the first row.
 func (l *list) setSections(secs []section) {
 	var key string
-	if r, ok := l.selected(); ok {
+	if r, ok := l.selected(); ok && l.touched {
 		key = r.key
 	}
 	l.sections = secs
+	if key == "" {
+		l.sel = 0
+		return
+	}
 	for i, r := range l.rows() {
 		if r.key == key {
 			l.sel = i
@@ -77,6 +83,7 @@ func (l *list) move(d int) {
 		return
 	}
 	l.sel = ((l.sel+d)%n + n) % n
+	l.touched = true
 }
 
 func (l *list) selected() (row, bool) {

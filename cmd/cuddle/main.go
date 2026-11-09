@@ -57,6 +57,7 @@ func runApp() error {
 		State:     state,
 		CachePath: store.CachePath(),
 		StatePath: store.StatePath(),
+		Watch:     rex.Watch,
 	}
 	_, err = tea.NewProgram(ui.NewApp(deps)).Run()
 	return err

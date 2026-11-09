@@ -320,6 +320,7 @@ func (a *App) onLaunched(m launchedMsg) tea.Cmd {
 	}
 	ag := m.res.Agent
 	a.state.AddAgent(ag)
+	a.agentInfo[ag.BlockID] = agentInfo{known: true, alive: true}
 	if ag.Repo != "" {
 		a.state.RememberRepo(ag.Client, ag.Repo)
 	}
@@ -341,7 +342,7 @@ func (a *App) onLaunched(m launchedMsg) tea.Cmd {
 	if len(m.res.Warnings) > 0 {
 		a.flash += sYellow.Render(" · " + strings.Join(m.res.Warnings, " · "))
 	}
-	return tea.Batch(a.saveState(), a.saveCache())
+	return tea.Batch(a.saveState(), a.saveCache(), a.refreshAgents())
 }
 
 // statusInfo finds a status of a list among the statuses seen so far.

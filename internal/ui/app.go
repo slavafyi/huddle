@@ -52,6 +52,8 @@ type Deps struct {
 	CachePath string
 	StatePath string
 	Now       func() time.Time
+	// Watch starts the Rex event stream. Nil disables live events.
+	Watch func(ctx context.Context) (<-chan rex.Event, error)
 }
 
 // App is the root model.
@@ -67,8 +69,13 @@ type App struct {
 	loadingTasks bool
 	syncErr      error
 
-	tasks *taskView
-	today *todayView
+	tasks  *taskView
+	today  *todayView
+	agents *agentView
+
+	agentInfo   map[string]agentInfo
+	confirmText string
+	confirmYes  func() tea.Cmd
 
 	mode        mode
 	picker      picker
@@ -104,7 +111,8 @@ func NewApp(d Deps) *App {
 	if d.Runner == nil {
 		d.Runner = run.Exec{}
 	}
-	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView(), today: newTodayView(), statuses: map[string][]clickup.Status{}}
+	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView(), today: newTodayView(), agents: newAgentView(),
+		statuses: map[string][]clickup.Status{}, agentInfo: map[string]agentInfo{}}
 	a.state = d.State
 	a.applyCache(d.Cache)
 	return a
@@ -120,13 +128,15 @@ func (a *App) applyCache(c store.Cache) {
 
 func (a *App) rebuild() {
 	now := a.now()
-	a.tasks.rebuild(a.cache.Tasks, a.cache.Me.ID, now, agentLookup{})
-	a.today.rebuild(a.cache.Tasks, a.cache.Me.ID, now, agentLookup{})
+	l := a.lookup()
+	a.tasks.rebuild(a.cache.Tasks, a.cache.Me.ID, now, l)
+	a.today.rebuild(a.cache.Tasks, a.cache.Me.ID, now, l)
+	a.agents.rebuild(a.state.Agents, a.agentInfo, now)
 }
 
 // Init loads tasks and starts the refresh timer.
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(a.refreshTasks(true), a.scanRepos(false), a.tick())
+	return tea.Batch(a.refreshTasks(true), a.scanRepos(false), a.refreshAgents(), a.startWatch(), a.tick())
 }
 
 // scanRepos rebuilds the local repo list when it is older than a day, or
@@ -215,7 +225,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return a, a.handleKey(msg)
 	case tickMsg:
-		cmds := []tea.Cmd{a.tick()}
+		cmds := []tea.Cmd{a.tick(), a.refreshAgents()}
 		if full, due := a.tasksDue(); due {
 			cmds = append(cmds, a.refreshTasks(full))
 		}
@@ -248,6 +258,23 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.onLaunched(msg)
 	case enterMsg:
 		return a, a.onEnter(msg)
+	case agentsMsg:
+		for b, i := range msg {
+			a.agentInfo[b] = i
+		}
+		a.rebuild()
+	case agentEventMsg:
+		return a, a.onAgentEvent(msg)
+	case watchMsg:
+		if msg.err != nil {
+			a.flash = sYellow.Render("no live agent updates: " + msg.err.Error())
+			return a, nil
+		}
+		return a, waitEvent(msg.ch)
+	case closedMsg:
+		return a, a.onClosed(msg)
+	case focusedMsg:
+		return a, a.onEnter(enterMsg{taskID: msg.agent.TaskID, agent: &msg.agent, err: msg.err})
 	case reposMsg:
 		a.cache.Repos, a.cache.ReposAt = msg.repos, msg.at
 		return a, a.saveCache()
@@ -266,6 +293,8 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return a.commentKey(msg)
 	case modeStart:
 		return a.startKey(msg)
+	case modeConfirm:
+		return a.confirmKey(k)
 	}
 	switch k {
 	case "q", "ctrl+c":
@@ -276,13 +305,15 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "r":
 		a.flash = sFaint.Render("refreshing…")
-		return a.refreshTasks(true)
+		return tea.Batch(a.refreshTasks(true), a.refreshAgents())
 	}
 	switch a.tab {
 	case TabTasks:
 		return a.taskKey(k)
 	case TabToday:
 		return a.listKey(&a.today.list, k)
+	case TabAgents:
+		return a.agentKey(k)
 	}
 	return nil
 }
@@ -413,6 +444,9 @@ func (a *App) Render() string {
 		b.WriteString(ansi.Truncate(line, a.width, "…") + "\n")
 	}
 	flash := a.flash
+	if a.mode == modeConfirm {
+		flash = sYellow.Render(a.confirmText) + sFaint.Render("  y yes · any other key no")
+	}
 	if a.mode == modeComment {
 		t, _ := a.taskByID(a.commentTask)
 		flash = sBold.Render("comment "+t.Key()+": ") + a.input + "▏" + sFaint.Render("  enter send · esc cancel")
@@ -460,6 +494,14 @@ func (a *App) viewParts() (sub string, body func(h int) string, detail []string,
 			detail = taskDetail(t, me, now)
 		}
 		keys = "j/k move · s status · c comment · a assign · o open · t filter · r refresh · q quit"
+	case TabAgents:
+		sub = sFaint.Render(plural(len(a.state.Agents), "agent")+" · tabs started by cuddle, live from Rex") + "\n" +
+			sFaint.Render("enter focus tab · x close tab (asks first)")
+		body = func(h int) string { return a.agents.list.render(a.bodyWidth(), h) }
+		if ag, ok := a.selectedAgent(); ok {
+			detail = agentDetail(ag, a.agentInfo[ag.BlockID])
+		}
+		keys = "j/k move · enter focus · x close · r refresh · 1–4 views · q quit"
 	default:
 		sub = sFaint.Render(tabNames[a.tab])
 		body = func(int) string { return sFaint.Render("coming soon") }
@@ -487,7 +529,7 @@ func (a *App) tabBar() string {
 		}
 	}
 	left := strings.Join(parts, "   ")
-	right := a.syncLabel() + "  " + sBold.Render("cuddle")
+	right := a.counters() + a.syncLabel() + "  " + sBold.Render("cuddle")
 	gap := a.width - ansi.StringWidth(left) - ansi.StringWidth(right)
 	return left + strings.Repeat(" ", max(1, gap)) + right
 }
@@ -504,9 +546,3 @@ func (a *App) syncLabel() string {
 	}
 	return sFaint.Render("synced " + ago(a.now().Sub(at)) + " ago")
 }
-
-// agentLookup marks tasks that have an agent tab. Filled in by later phases.
-type agentLookup struct{}
-
-func (agentLookup) badge(string) string { return "" }
-func (agentLookup) state(string) string { return "" }
