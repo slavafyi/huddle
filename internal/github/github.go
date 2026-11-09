@@ -10,8 +10,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/slavafyi/huddle/internal/clickup"
 	"github.com/slavafyi/huddle/internal/run"
+	"github.com/slavafyi/huddle/internal/task"
 )
 
 // Kind says why a PR is listed.
@@ -150,31 +150,23 @@ func (g *GH) PRs(ctx context.Context, now time.Time) ([]PR, error) {
 	return prs, nil
 }
 
-// LinkTask returns the ID of the task a PR belongs to: the first known task
-// ID (custom or ClickUp's own, also as CU-<id>) that appears as a whole word
-// in the branch name, else in the title. "" means no link.
-func LinkTask(p PR, tasks []clickup.Task) string {
+// LinkTask returns the task a PR belongs to: the first task with a link
+// word (task.Task.Links) that appears as a whole word in the branch name,
+// else in the title.
+func LinkTask(p PR, tasks []task.Task) (task.Task, bool) {
 	for _, text := range []string{p.Branch, p.Title} {
 		words := strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
 			return !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-')
 		})
 		for _, w := range words {
 			for _, t := range tasks {
-				for _, key := range taskKeys(t) {
+				for _, key := range t.Links {
 					if w == key || strings.HasPrefix(w, key+"-") {
-						return t.ID
+						return t, true
 					}
 				}
 			}
 		}
 	}
-	return ""
-}
-
-func taskKeys(t clickup.Task) []string {
-	keys := []string{strings.ToLower(t.ID), "cu-" + strings.ToLower(t.ID)}
-	if t.CustomID != "" {
-		keys = append(keys, strings.ToLower(t.CustomID))
-	}
-	return keys
+	return task.Task{}, false
 }

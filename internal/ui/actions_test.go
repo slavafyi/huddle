@@ -21,7 +21,7 @@ func selectTask(t *testing.T, e *testEnv, id string) {
 	t.Helper()
 	e.press("2")
 	for i := 0; i < 20; i++ {
-		if r, _ := e.app.tasks.list.selected(); r.key == id {
+		if r, _ := e.app.tasks.list.selected(); r.key == ref(id) {
 			return
 		}
 		e.press("j")
@@ -130,12 +130,12 @@ func TestAssignToggle(t *testing.T) {
 	selectTask(t, e, "t3") // lead only, assigned to Malcolm
 	e.press("a")
 	tk, _ := e.app.taskByID("t3")
-	if !tk.AssignedTo(me.ID) || e.cu.writes[0] != "assign t3" {
+	if !tk.Mine || e.cu.writes[0] != "assign t3" {
 		t.Fatalf("assign: writes=%v", e.cu.writes)
 	}
 	e.press("a")
 	tk, _ = e.app.taskByID("t3")
-	if tk.AssignedTo(me.ID) || e.cu.writes[1] != "unassign t3" {
+	if tk.Mine || e.cu.writes[1] != "unassign t3" {
 		t.Fatalf("unassign: writes=%v", e.cu.writes)
 	}
 }
@@ -147,7 +147,7 @@ func TestAssignUndoneOnError(t *testing.T) {
 	e.cu.writeErr = errors.New("forbidden")
 	e.press("a")
 	tk, _ := e.app.taskByID("t3")
-	if tk.AssignedTo(me.ID) {
+	if tk.Mine {
 		t.Error("assign not undone")
 	}
 }

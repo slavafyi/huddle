@@ -29,9 +29,9 @@ func TestLiveLaunch(t *testing.T) {
 	ctx := context.Background()
 	rx := &rex.CLI{Runner: run.Exec{}}
 	cu := &fakeCU{}
-	d := Deps{Runner: run.Exec{}, Rex: noFocus{rx}, ClickUp: cu, Now: time.Now}
+	d := Deps{Runner: run.Exec{}, Rex: noFocus{rx}, Source: &clickup.Source{Client: cu}, Now: time.Now}
 	root := t.TempDir()
-	tk := clickup.Task{ID: "x1", CustomID: "TEST-1", Name: "Live launch check", ListName: "huddle-live-client"}
+	tk := clickup.ToTask(clickup.Task{ID: "x1", CustomID: "TEST-1", Name: "Live launch check", ListName: "huddle-live-client"}, 0)
 	p := Plan{Task: tk, TabName: "TEST-1 Live launch check",
 		Workspace: workspace.Plan{Kind: workspace.Scratch, ScratchRoot: root, TaskKey: "test-1", Slug: "live-launch-check"}}
 

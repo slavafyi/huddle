@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/slavafyi/huddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/task"
 )
 
 // mode is what keys currently go to.
@@ -24,12 +24,12 @@ const (
 
 type (
 	statusesMsg struct {
-		taskID   string
-		listID   string
-		statuses []clickup.Status
+		ref      string // task.Ref of the task
+		list     string // key in App.statuses
+		statuses []task.Status
 		err      error
 	}
-	// writeMsg reports a finished ClickUp write for op (0: no screen change).
+	// writeMsg reports a finished task write for op (0: no screen change).
 	writeMsg struct {
 		op  uint64
 		ok  string
@@ -39,34 +39,34 @@ type (
 
 // picker is the status picker state.
 type picker struct {
-	taskID   string
-	statuses []clickup.Status
+	ref      string // task.Ref of the task
+	statuses []task.Status
 	cursor   int
 }
 
 // openStatusPicker fetches the list's statuses (once per list) and opens
 // the picker.
-func (a *App) openStatusPicker(t clickup.Task) tea.Cmd {
-	if st, ok := a.statuses[t.ListID]; ok {
-		a.showPicker(t.ID, st)
+func (a *App) openStatusPicker(t task.Task, src task.Source) tea.Cmd {
+	list := task.Ref(t.Source, t.ListID)
+	if st, ok := a.statuses[list]; ok {
+		a.showPicker(t.Ref(), st)
 		return nil
 	}
-	cu := a.deps.ClickUp
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		st, err := cu.Statuses(ctx, t.ListID)
-		return statusesMsg{taskID: t.ID, listID: t.ListID, statuses: st, err: err}
+		st, err := src.Statuses(ctx, t)
+		return statusesMsg{ref: t.Ref(), list: list, statuses: st, err: err}
 	}
 }
 
-func (a *App) showPicker(taskID string, st []clickup.Status) {
+func (a *App) showPicker(ref string, st []task.Status) {
 	if len(st) == 0 {
 		a.flash = sYellow.Render("this list has no statuses")
 		return
 	}
-	t, _ := a.taskByID(taskID)
-	p := picker{taskID: taskID, statuses: st}
+	t, _ := a.taskByRef(ref)
+	p := picker{ref: ref, statuses: st}
 	for i, s := range st {
 		if s.Name == t.Status {
 			p.cursor = i
@@ -97,60 +97,53 @@ func (a *App) pickerKey(k string) tea.Cmd {
 	return nil
 }
 
-// applyStatus changes the status on screen at once, then in ClickUp.
-func (a *App) applyStatus(s clickup.Status) tea.Cmd {
+// applyStatus changes the status on screen at once, then in the source.
+func (a *App) applyStatus(s task.Status) tea.Cmd {
 	a.mode = modeNormal
-	t, ok := a.taskByID(a.picker.taskID)
-	if !ok || t.Status == s.Name {
+	t, ok := a.taskByRef(a.picker.ref)
+	src := a.source(t.Source)
+	if !ok || src == nil || t.Status == s.Name {
 		return nil
 	}
-	id := a.newOp(t.ID, "status", setStatus(s, a.now()), setStatus(clickup.Status{Name: t.Status, Type: t.StatusType, Order: t.StatusOrder}, t.Done))
-	cu := a.deps.ClickUp
-	return a.write(id, fmt.Sprintf("%s → %s", t.Key(), s.Name), func(ctx context.Context) error {
-		return cu.SetStatus(ctx, t.ID, s.Name)
+	id := a.newOp(t.Ref(), "status", setStatus(s, a.now()), setStatus(currentStatus(t), t.Done))
+	return a.write(id, fmt.Sprintf("%s → %s", t.Key, s.Name), func(ctx context.Context) error {
+		return src.SetStatus(ctx, t, s.Name)
 	})
+}
+
+// currentStatus is a task's status, for undoing a change.
+func currentStatus(t task.Task) task.Status {
+	return task.Status{Name: t.Status, Order: t.StatusOrder, Done: t.IsDone()}
 }
 
 // setStatus returns a change that sets a task's status. done is used when
 // the status is a done/closed one.
-func setStatus(s clickup.Status, done time.Time) func(*clickup.Task) {
-	return func(t *clickup.Task) {
-		t.Status, t.StatusType, t.StatusOrder = s.Name, s.Type, s.Order
+func setStatus(s task.Status, done time.Time) func(*task.Task) {
+	return func(t *task.Task) {
+		t.Status, t.StatusOrder = s.Name, s.Order
 		t.Done = time.Time{}
-		if s.Type == "closed" || s.Type == "done" {
+		if s.Done {
 			t.Done = done
 		}
 	}
 }
 
 // setAssigned returns a change that adds (or removes) me as assignee.
-func setAssigned(me clickup.User, on bool) func(*clickup.Task) {
-	return func(t *clickup.Task) {
-		var rest []clickup.User
-		for _, u := range t.Assignees {
-			if u.ID != me.ID {
-				rest = append(rest, u)
-			}
-		}
-		if on {
-			rest = append(rest, me)
-		}
-		t.Assignees = rest
-	}
+func setAssigned(on bool) func(*task.Task) {
+	return func(t *task.Task) { t.Mine = on }
 }
 
 // toggleAssign adds or removes me as assignee, on screen at once.
-func (a *App) toggleAssign(t clickup.Task) tea.Cmd {
-	me := a.cache.Me
-	add := !t.AssignedTo(me.ID)
-	id := a.newOp(t.ID, "assign", setAssigned(me, add), setAssigned(me, !add))
-	msg := t.Key() + ": assigned to you"
+func (a *App) toggleAssign(t task.Task, src task.Source) tea.Cmd {
+	me := a.cache.Me[t.Source]
+	add := !t.Mine
+	id := a.newOp(t.Ref(), "assign", setAssigned(add), setAssigned(!add))
+	msg := t.Key + ": assigned to you"
 	if !add {
-		msg = t.Key() + ": unassigned you"
+		msg = t.Key + ": unassigned you"
 	}
-	cu := a.deps.ClickUp
 	return a.write(id, msg, func(ctx context.Context) error {
-		return cu.SetAssignee(ctx, t.ID, me.ID, add)
+		return src.SetAssignee(ctx, t, me, add)
 	})
 }
 
@@ -163,13 +156,13 @@ func (a *App) commentKey(msg tea.KeyPressMsg) tea.Cmd {
 		text := a.input
 		a.mode, a.input = modeNormal, ""
 		a.flash = ""
-		t, ok := a.taskByID(a.commentTask)
-		if !ok || text == "" {
+		t, ok := a.taskByRef(a.commentTask)
+		src := a.source(t.Source)
+		if !ok || src == nil || text == "" {
 			return nil
 		}
-		cu := a.deps.ClickUp
-		return a.write(0, t.Key()+": comment added", func(ctx context.Context) error {
-			return cu.AddComment(ctx, t.ID, text)
+		return a.write(0, t.Key+": comment added", func(ctx context.Context) error {
+			return src.AddComment(ctx, t, text)
 		})
 	case "backspace":
 		if r := []rune(a.input); len(r) > 0 {
@@ -181,7 +174,7 @@ func (a *App) commentKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-// write runs a ClickUp write in the background.
+// write runs a task write in the background.
 func (a *App) write(op uint64, ok string, fn func(context.Context) error) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -201,14 +194,14 @@ func (a *App) onWrite(m writeMsg) tea.Cmd {
 }
 
 func (a *App) renderPicker() []string {
-	t, _ := a.taskByID(a.picker.taskID)
-	lines := []string{sBold.Render("Status") + sFaint.Render(" · "+t.Key())}
+	t, _ := a.taskByRef(a.picker.ref)
+	lines := []string{sBold.Render("Status") + sFaint.Render(" · "+t.Key)}
 	for i, s := range a.picker.statuses {
 		mark := "  "
 		if i == a.picker.cursor {
 			mark = "› "
 		}
-		line := fmt.Sprintf("%s%d %s %s", mark, i+1, statusStyle(s.Name).Render("■"), s.Name)
+		line := fmt.Sprintf("%s%d %s %s", mark, i+1, statusStyle(s.Name, s.Done).Render("■"), s.Name)
 		if s.Name == t.Status {
 			line += sFaint.Render(" (current)")
 		}

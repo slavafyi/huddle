@@ -8,6 +8,7 @@ import (
 
 	"github.com/slavafyi/huddle/internal/clickup"
 	"github.com/slavafyi/huddle/internal/run"
+	"github.com/slavafyi/huddle/internal/task"
 )
 
 const reply = `{"data": {
@@ -85,10 +86,10 @@ func TestPRsGraphQLError(t *testing.T) {
 }
 
 func TestLinkTask(t *testing.T) {
-	tasks := []clickup.Task{
-		{ID: "86a1b2c3d", CustomID: "DEV-7725"},
-		{ID: "86c1x2abc"}, // no custom ID
-		{ID: "x9", CustomID: "WEB-12"},
+	tasks := []task.Task{
+		clickup.ToTask(clickup.Task{ID: "86a1b2c3d", CustomID: "DEV-7725"}, 0),
+		clickup.ToTask(clickup.Task{ID: "86c1x2abc"}, 0), // no custom ID
+		clickup.ToTask(clickup.Task{ID: "x9", CustomID: "WEB-12"}, 0),
 	}
 	cases := []struct {
 		branch, title, want string
@@ -103,9 +104,9 @@ func TestLinkTask(t *testing.T) {
 		{"feature/web-12-new-prefix", "", "x9"}, // any prefix works
 	}
 	for _, c := range cases {
-		got := LinkTask(PR{Branch: c.branch, Title: c.title}, tasks)
-		if got != c.want {
-			t.Errorf("%q / %q: got %q, want %q", c.branch, c.title, got, c.want)
+		got, _ := LinkTask(PR{Branch: c.branch, Title: c.title}, tasks)
+		if got.ID != c.want {
+			t.Errorf("%q / %q: got %q, want %q", c.branch, c.title, got.ID, c.want)
 		}
 	}
 }

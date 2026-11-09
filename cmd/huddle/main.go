@@ -15,6 +15,7 @@ import (
 	"github.com/slavafyi/huddle/internal/rex"
 	"github.com/slavafyi/huddle/internal/run"
 	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/task"
 	"github.com/slavafyi/huddle/internal/ui"
 )
 
@@ -51,12 +52,16 @@ func runApp() error {
 	if err := store.Load(store.StatePath(), &state); err != nil {
 		return fmt.Errorf("%w (fix or move the file; it links tasks to Rex tabs)", err)
 	}
+	state.Migrate()
 	deps := ui.Deps{
 		Config: cfg,
-		ClickUp: &clickup.HTTP{
-			BaseURL: clickup.DefaultBaseURL, Token: token,
-			TeamID: cfg.WorkspaceID, LeadFieldID: cfg.LeadFieldID,
-		},
+		Sources: []task.Source{&clickup.Source{
+			Client: &clickup.HTTP{
+				BaseURL: clickup.DefaultBaseURL, Token: token,
+				TeamID: cfg.WorkspaceID, LeadFieldID: cfg.LeadFieldID,
+			},
+			InProgress: cfg.StatusInProgress,
+		}},
 		GitHub:    &github.GH{Runner: runner, Org: cfg.GitHubOrg},
 		Rex:       &rex.CLI{Runner: runner},
 		Runner:    runner,

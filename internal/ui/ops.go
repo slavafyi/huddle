@@ -7,27 +7,27 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/slavafyi/huddle/internal/clickup"
 	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/task"
 )
 
-// op is an optimistic change to one task, shown before ClickUp confirms it.
+// op is an optimistic change to one task, shown before its source confirms it.
 // It is re-applied over refresh results until a refresh that started after
 // the write finished has come back, so an older refresh can't undo it.
 type op struct {
-	taskID string
+	ref    string // task.Ref of the task
 	field  string // "status" or "assign"
-	apply  func(*clickup.Task)
-	undo   func(*clickup.Task)
+	apply  func(*task.Task)
+	undo   func(*task.Task)
 	done   bool
 	doneAt uint64 // value of App.completed when the write finished
 }
 
 // newOp applies a change on screen at once and remembers it.
-func (a *App) newOp(taskID, field string, apply, undo func(*clickup.Task)) uint64 {
+func (a *App) newOp(ref, field string, apply, undo func(*task.Task)) uint64 {
 	a.opID++
-	a.ops[a.opID] = &op{taskID: taskID, field: field, apply: apply, undo: undo}
-	a.editTask(taskID, apply)
+	a.ops[a.opID] = &op{ref: ref, field: field, apply: apply, undo: undo}
+	a.editTask(ref, apply)
 	return a.opID
 }
 
@@ -41,7 +41,7 @@ func (a *App) finishOp(id uint64, ok bool) {
 	if !ok {
 		delete(a.ops, id)
 		if !a.newerOp(o, id) { // a later change to the same field wins
-			a.editTask(o.taskID, o.undo)
+			a.editTask(o.ref, o.undo)
 		}
 		return
 	}
@@ -51,7 +51,7 @@ func (a *App) finishOp(id uint64, ok bool) {
 
 func (a *App) newerOp(o *op, id uint64) bool {
 	for other, p := range a.ops {
-		if other > id && p.taskID == o.taskID && p.field == o.field {
+		if other > id && p.ref == o.ref && p.field == o.field {
 			return true
 		}
 	}
@@ -72,16 +72,16 @@ func (a *App) reapplyOps(seq uint64) {
 			delete(a.ops, id)
 			continue
 		}
-		a.editTask(o.taskID, o.apply)
+		a.editTask(o.ref, o.apply)
 	}
 }
 
 // editTask changes one task. It copies the task slice first, so a snapshot
 // being saved in the background never sees the change.
-func (a *App) editTask(id string, fn func(*clickup.Task)) {
-	tasks := append([]clickup.Task(nil), a.cache.Tasks...)
+func (a *App) editTask(ref string, fn func(*task.Task)) {
+	tasks := append([]task.Task(nil), a.cache.Tasks...)
 	for i := range tasks {
-		if tasks[i].ID == id {
+		if tasks[i].Ref() == ref {
 			fn(&tasks[i])
 		}
 	}

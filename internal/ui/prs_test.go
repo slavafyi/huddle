@@ -101,7 +101,7 @@ func TestPRErrorKeepsCache(t *testing.T) {
 func TestCleanupMergedWorktreesAsksFirst(t *testing.T) {
 	e, _ := prEnv(t)
 	e.app.cache.Repos = []workspace.Repo{{Name: "snowcap", Path: "/r/snowcap"}}
-	merged := store.Agent{TaskID: "t1", TaskKey: "DEV-7808", Client: "Harbor and Goods", Workspace: workspace.Worktree.ID(),
+	merged := store.Agent{Source: "clickup", TaskID: "t1", TaskKey: "DEV-7808", Client: "Harbor and Goods", Workspace: workspace.Worktree.ID(),
 		Repo: "snowcap", Branch: "feature/dev-7808-preorder", Dir: "/w/snowcap/dev-7808",
 		Placement: rex.Placement{SessionID: "session:S", WindowID: "window:7", BlockID: "block:7"}}
 	open := merged

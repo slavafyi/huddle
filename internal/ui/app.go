@@ -5,18 +5,19 @@ package ui
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/slavafyi/huddle/internal/clickup"
 	"github.com/slavafyi/huddle/internal/config"
 	"github.com/slavafyi/huddle/internal/github"
 	"github.com/slavafyi/huddle/internal/rex"
 	"github.com/slavafyi/huddle/internal/run"
 	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/task"
 	"github.com/slavafyi/huddle/internal/workspace"
 )
 
@@ -45,7 +46,7 @@ const (
 // Deps are the services the UI uses.
 type Deps struct {
 	Config    config.Config
-	ClickUp   clickup.Client
+	Sources   []task.Source // where tasks come from
 	GitHub    github.Client
 	Rex       rex.Client
 	Runner    run.Runner
@@ -70,6 +71,7 @@ type App struct {
 
 	cache        store.Cache
 	state        store.State
+	rules        map[string]task.Rules // by source name
 	loadingTasks bool
 	syncErr      error
 
@@ -98,21 +100,19 @@ type App struct {
 
 	mode        mode
 	picker      picker
-	statuses    map[string][]clickup.Status
+	statuses    map[string][]task.Status // by task.Ref(source, list ID)
 	input       string
-	commentTask string
+	commentTask string // task.Ref
 	start       *startPanel
 }
 
 // Messages.
 type (
 	tasksMsg struct {
-		me    clickup.User
-		tasks []clickup.Task
-		full  bool
-		at    time.Time
-		err   error
-		seq   uint64 // App.completed when the refresh started
+		results []fetched // one per source
+		full    bool
+		at      time.Time
+		seq     uint64 // App.completed when the refresh started
 	}
 	tickMsg  time.Time
 	errMsg   struct{ err error }
@@ -123,6 +123,14 @@ type (
 	}
 )
 
+// fetched is one source's refresh result.
+type fetched struct {
+	source string
+	me     int64
+	tasks  []task.Task
+	err    error
+}
+
 // NewApp returns the root model.
 func NewApp(d Deps) *App {
 	if d.Now == nil {
@@ -132,8 +140,11 @@ func NewApp(d Deps) *App {
 		d.Runner = run.Exec{}
 	}
 	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView(), today: newTodayView(), agents: newAgentView(), prs: newPRView(),
-		statuses: map[string][]clickup.Status{}, agentInfo: map[string]agentInfo{},
+		statuses: map[string][]task.Status{}, rules: map[string]task.Rules{}, agentInfo: map[string]agentInfo{},
 		ops: map[uint64]*op{}, launching: map[string]bool{}, lastStart: map[string]*startPanel{}, writer: &store.Writer{}}
+	for _, s := range d.Sources {
+		a.rules[s.Name()] = s.Rules()
+	}
 	a.state = d.State
 	a.applyCache(d.Cache)
 	return a
@@ -150,8 +161,8 @@ func (a *App) applyCache(c store.Cache) {
 func (a *App) rebuild() {
 	now := a.now()
 	l := a.lookup()
-	a.tasks.rebuild(a.cache.Tasks, a.cache.Me.ID, now, l)
-	a.today.rebuild(a.cache.Tasks, a.cache.Me.ID, now, l)
+	a.tasks.rebuild(a.cache.Tasks, now, l)
+	a.today.rebuild(a.cache.Tasks, a.rules, now, l)
 	a.agents.rebuild(a.state.Agents, a.agentInfo, now)
 	a.prs.rebuild(a.cache.PRs, a.cache.Tasks, now)
 }
@@ -184,14 +195,15 @@ func (a *App) tasksDue() (full, due bool) {
 	return false, now.Sub(a.cache.TasksSyncedAt) >= tasksEvery
 }
 
-// refreshTasks fetches tasks in the background. A non-full refresh only asks
-// for tasks updated since the last sync (minus a margin).
+// refreshTasks fetches tasks from every source in the background. A
+// non-full refresh only asks for tasks updated since the last sync (minus a
+// margin).
 func (a *App) refreshTasks(full bool) tea.Cmd {
-	if a.loadingTasks || a.deps.ClickUp == nil {
+	if a.loadingTasks || len(a.deps.Sources) == 0 {
 		return nil
 	}
 	a.loadingTasks = true
-	cu, me, now, seq := a.deps.ClickUp, a.cache.Me, a.now(), a.completed
+	srcs, me, now, seq := a.deps.Sources, maps.Clone(a.cache.Me), a.now(), a.completed
 	since := time.Time{}
 	if !full && !a.cache.TasksSyncedAt.IsZero() {
 		since = a.cache.TasksSyncedAt.Add(-tasksSinceMargin)
@@ -199,16 +211,29 @@ func (a *App) refreshTasks(full bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		if me.ID == 0 {
-			u, err := cu.Me(ctx)
-			if err != nil {
-				return tasksMsg{err: err}
+		msg := tasksMsg{full: since.IsZero(), at: now, seq: seq}
+		for _, s := range srcs {
+			r := fetched{source: s.Name(), me: me[s.Name()]}
+			if r.me == 0 {
+				r.me, r.err = s.Me(ctx)
 			}
-			me = u
+			if r.err == nil {
+				r.tasks, r.err = s.Fetch(ctx, r.me, since, now)
+			}
+			msg.results = append(msg.results, r)
 		}
-		ts, err := cu.MyTasks(ctx, me.ID, since, now)
-		return tasksMsg{me: me, tasks: ts, full: since.IsZero(), at: now, err: err, seq: seq}
+		return msg
 	}
+}
+
+// source returns the source with the given name, or nil.
+func (a *App) source(name string) task.Source {
+	for _, s := range a.deps.Sources {
+		if s.Name() == name {
+			return s
+		}
+	}
+	return nil
 }
 
 // Update handles messages.
@@ -236,16 +261,32 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.refreshAgain = false
 			again = a.refreshTasks(false)
 		}
-		if msg.err != nil {
-			a.syncErr = msg.err
+		// A failed source keeps its cached tasks; the others still merge.
+		// Sync times move only when every source succeeded.
+		a.syncErr = nil
+		merged := false
+		for _, r := range msg.results {
+			if r.err != nil {
+				if a.syncErr == nil {
+					a.syncErr = r.err
+				}
+				continue
+			}
+			if a.cache.Me == nil {
+				a.cache.Me = map[string]int64{}
+			}
+			a.cache.Me[r.source] = r.me
+			a.cache.Tasks = task.Merge(a.cache.Tasks, r.tasks, r.source, msg.full, msg.at)
+			merged = true
+		}
+		if !merged {
 			return a, again
 		}
-		a.syncErr = nil
-		a.cache.Me = msg.me
-		a.cache.Tasks = clickup.Merge(a.cache.Tasks, msg.tasks, msg.full, msg.me.ID, msg.at)
-		a.cache.TasksSyncedAt = msg.at
-		if msg.full {
-			a.cache.TasksFullAt = msg.at
+		if a.syncErr == nil {
+			a.cache.TasksSyncedAt = msg.at
+			if msg.full {
+				a.cache.TasksFullAt = msg.at
+			}
 		}
 		a.reapplyOps(msg.seq)
 		a.rebuild()
@@ -255,14 +296,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.flash = sRed.Render(msg.err.Error())
 			return a, nil
 		}
-		a.statuses[msg.listID] = msg.statuses
-		a.showPicker(msg.taskID, msg.statuses)
+		a.statuses[msg.list] = msg.statuses
+		a.showPicker(msg.ref, msg.statuses)
 	case writeMsg:
 		return a, a.onWrite(msg)
 	case openedMsg:
 		return a, a.onOpened(msg)
-	case clickupDoneMsg:
-		return a, a.onClickupDone(msg)
+	case appliedMsg:
+		return a, a.onApplied(msg)
 	case enterMsg:
 		return a, a.onEnter(msg)
 	case agentsMsg:
@@ -289,7 +330,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case cleanedMsg:
 		return a, a.onCleaned(msg)
 	case focusedMsg:
-		return a, a.onEnter(enterMsg{taskID: msg.agent.TaskID, agent: &msg.agent, err: msg.err})
+		return a, a.onEnter(enterMsg{ref: msg.agent.TaskRef(), agent: &msg.agent, err: msg.err})
 	case reposMsg:
 		a.cache.Repos, a.cache.ReposAt = msg.repos, msg.at
 		return a, a.saveCache()
@@ -396,6 +437,14 @@ func (a *App) taskAction(k string) tea.Cmd {
 	case TabToday:
 		a.today.list.touched = true
 	}
+	src := a.source(t.Source)
+	switch k {
+	case "s", "c", "a", "enter", "shift+enter":
+		if src == nil {
+			a.flash = sYellow.Render(t.Key + ": " + t.Source + " is not set up")
+			return nil
+		}
+	}
 	switch k {
 	case "o":
 		return a.openURL(t.URL)
@@ -403,16 +452,16 @@ func (a *App) taskAction(k string) tea.Cmd {
 		if p, ok := a.taskPR(t); ok {
 			return a.openURL(p.URL)
 		}
-		a.flash = sFaint.Render("no PR for " + t.Key() + " · branch names with the task ID link them")
+		a.flash = sFaint.Render("no PR for " + t.Key + " · branch names with the task ID link them")
 	case "s":
-		return a.openStatusPicker(t)
+		return a.openStatusPicker(t, src)
 	case "c":
-		a.mode, a.input, a.commentTask = modeComment, "", t.ID
+		a.mode, a.input, a.commentTask = modeComment, "", t.Ref()
 	case "a":
-		return a.toggleAssign(t)
+		return a.toggleAssign(t, src)
 	case "enter", "shift+enter":
-		if a.launching[t.ID] {
-			a.flash = sYellow.Render("already starting " + t.Key() + "…")
+		if a.launching[t.Ref()] {
+			a.flash = sYellow.Render("already starting " + t.Key + "…")
 			return nil
 		}
 		if k == "enter" {
@@ -425,7 +474,7 @@ func (a *App) taskAction(k string) tea.Cmd {
 }
 
 // selectedTask returns the task under the cursor in the current view.
-func (a *App) selectedTask() (clickup.Task, bool) {
+func (a *App) selectedTask() (task.Task, bool) {
 	var r row
 	var ok bool
 	switch a.tab {
@@ -435,18 +484,19 @@ func (a *App) selectedTask() (clickup.Task, bool) {
 		r, ok = a.today.list.selected()
 	}
 	if !ok {
-		return clickup.Task{}, false
+		return task.Task{}, false
 	}
-	return a.taskByID(r.key)
+	return a.taskByRef(r.key)
 }
 
-func (a *App) taskByID(id string) (clickup.Task, bool) {
+// taskByRef finds a task by its task.Ref.
+func (a *App) taskByRef(ref string) (task.Task, bool) {
 	for _, t := range a.cache.Tasks {
-		if t.ID == id {
+		if t.Ref() == ref {
 			return t, true
 		}
 	}
-	return clickup.Task{}, false
+	return task.Task{}, false
 }
 
 // openURL opens a link in the browser.
@@ -508,8 +558,8 @@ func (a *App) Render() string {
 		flash = sYellow.Render(a.confirmText) + sFaint.Render("  y yes · any other key no")
 	}
 	if a.mode == modeComment {
-		t, _ := a.taskByID(a.commentTask)
-		flash = sBold.Render("comment "+t.Key()+": ") + a.input + "▏" + sFaint.Render("  enter send · esc cancel")
+		t, _ := a.taskByRef(a.commentTask)
+		flash = sBold.Render("comment "+t.Key+": ") + a.input + "▏" + sFaint.Render("  enter send · esc cancel")
 	}
 	// Last line: messages on the left, the help key on the right.
 	help := sFaint.Render("? keys")
@@ -543,19 +593,19 @@ func pad(s string, h int) string {
 }
 
 func (a *App) viewParts() (sub string, body func(h int) string, detail []string) {
-	me, now := a.cache.Me.ID, a.now()
+	now := a.now()
 	switch a.tab {
 	case TabToday:
 		sub = a.today.subHeader(now)
 		body = func(h int) string { return a.today.list.render(a.bodyWidth(), h) }
 		if t, ok := a.selectedTask(); ok {
-			detail = taskDetail(t, me, now)
+			detail = taskDetail(t, now)
 		}
 	case TabTasks:
-		sub = a.tasks.subHeader(a.cache.Tasks, me)
+		sub = a.tasks.subHeader(a.cache.Tasks)
 		body = func(h int) string { return a.tasks.list.render(a.bodyWidth(), h) }
 		if t, ok := a.selectedTask(); ok {
-			detail = taskDetail(t, me, now)
+			detail = taskDetail(t, now)
 		}
 	case TabPRs:
 		var mine, review int

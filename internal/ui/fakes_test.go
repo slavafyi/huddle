@@ -17,6 +17,7 @@ import (
 	"github.com/slavafyi/huddle/internal/rex"
 	"github.com/slavafyi/huddle/internal/run"
 	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/task"
 	"github.com/slavafyi/huddle/internal/workspace"
 )
 
@@ -105,6 +106,21 @@ func sampleTasks() []clickup.Task {
 	}
 }
 
+// ref is the task.Ref of a ClickUp task ID.
+func ref(id string) string { return task.Ref(clickup.SourceName, id) }
+
+// taskByID finds a ClickUp task by its ClickUp ID.
+func (a *App) taskByID(id string) (task.Task, bool) { return a.taskByRef(ref(id)) }
+
+// cachedTasks are sampleTasks as the ClickUp source returns them.
+func cachedTasks() []task.Task {
+	var out []task.Task
+	for _, t := range sampleTasks() {
+		out = append(out, clickup.ToTask(t, me.ID))
+	}
+	return out
+}
+
 type testEnv struct {
 	app     *App
 	cu      *fakeClickUp
@@ -132,7 +148,7 @@ func newEnv(t *testing.T) *testEnv {
 	}
 	e.app = NewApp(Deps{
 		Config:    cfg,
-		ClickUp:   e.cu,
+		Sources:   []task.Source{&clickup.Source{Client: e.cu, InProgress: cfg.StatusInProgress}},
 		Rex:       e.rex,
 		Runner:    e.runner,
 		CachePath: e.cache,

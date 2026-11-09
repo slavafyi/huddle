@@ -58,11 +58,11 @@ func TestSelectionMovesAndShowsDetail(t *testing.T) {
 	if first.key == second.key {
 		t.Fatal("j did not move")
 	}
-	task, _ := e.app.taskByID(second.key)
+	task, _ := e.app.taskByRef(second.key)
 	_, _, detail := e.app.viewParts()
 	got := ansi.Strip(strings.Join(detail, "\n"))
-	if !strings.Contains(got, task.Name) || !strings.Contains(got, task.Key()) {
-		t.Errorf("detail for %s wrong:\n%s", task.Key(), got)
+	if !strings.Contains(got, task.Name) || !strings.Contains(got, task.Key) {
+		t.Errorf("detail for %s wrong:\n%s", task.Key, got)
 	}
 }
 
@@ -70,14 +70,14 @@ func TestRefreshSavesCache(t *testing.T) {
 	e := newEnv(t)
 	e.load(t)
 	c := e.cacheOnDisk(t)
-	if c.Version != 1 || len(c.Tasks) != 5 || c.Me.ID != 1 || !c.TasksFullAt.Equal(testNow) {
-		t.Errorf("cache: version=%d tasks=%d me=%d full=%v", c.Version, len(c.Tasks), c.Me.ID, c.TasksFullAt)
+	if c.Version != store.CacheVersion || len(c.Tasks) != 5 || c.Me[clickup.SourceName] != 1 || !c.TasksFullAt.Equal(testNow) {
+		t.Errorf("cache: version=%d tasks=%d me=%d full=%v", c.Version, len(c.Tasks), c.Me[clickup.SourceName], c.TasksFullAt)
 	}
 }
 
 func TestStartsFromCacheAndShowsOfflineOnError(t *testing.T) {
 	e := newEnv(t)
-	e.app.applyCache(store.Cache{Version: 1, Me: me, Tasks: sampleTasks(), TasksSyncedAt: testNow.Add(-12 * time.Minute), TasksFullAt: testNow.Add(-12 * time.Minute)})
+	e.app.applyCache(store.Cache{Version: store.CacheVersion, Me: map[string]int64{clickup.SourceName: me.ID}, Tasks: cachedTasks(), TasksSyncedAt: testNow.Add(-12 * time.Minute), TasksFullAt: testNow.Add(-12 * time.Minute)})
 	e.press("2")
 	if !strings.Contains(plain(e), "DEV-7700") {
 		t.Fatal("cached tasks not shown before refresh")
@@ -95,7 +95,7 @@ func TestStartsFromCacheAndShowsOfflineOnError(t *testing.T) {
 
 func TestIncrementalRefreshUsesLastSync(t *testing.T) {
 	e := newEnv(t)
-	e.app.applyCache(store.Cache{Version: 1, Me: me, Tasks: sampleTasks(), TasksSyncedAt: testNow.Add(-5 * time.Minute), TasksFullAt: testNow.Add(-5 * time.Minute)})
+	e.app.applyCache(store.Cache{Version: store.CacheVersion, Me: map[string]int64{clickup.SourceName: me.ID}, Tasks: cachedTasks(), TasksSyncedAt: testNow.Add(-5 * time.Minute), TasksFullAt: testNow.Add(-5 * time.Minute)})
 	e.cu.tasks = []clickup.Task{{ID: "t2", CustomID: "DEV-7700", Name: "Renamed", Status: "to start", Assignees: []clickup.User{me}}}
 	e.run(e.app.refreshTasks(false))
 	if got := e.cu.sinces[0]; !got.Equal(testNow.Add(-6 * time.Minute)) {
@@ -109,7 +109,7 @@ func TestIncrementalRefreshUsesLastSync(t *testing.T) {
 
 func TestTickDecidesRefresh(t *testing.T) {
 	e := newEnv(t)
-	e.app.applyCache(store.Cache{Version: 1, Me: me, TasksSyncedAt: testNow.Add(-time.Minute), TasksFullAt: testNow.Add(-time.Minute)})
+	e.app.applyCache(store.Cache{Version: store.CacheVersion, Me: map[string]int64{clickup.SourceName: me.ID}, TasksSyncedAt: testNow.Add(-time.Minute), TasksFullAt: testNow.Add(-time.Minute)})
 	if full, due := e.app.tasksDue(); due {
 		t.Errorf("refresh too early (full=%v)", full)
 	}
@@ -128,7 +128,7 @@ func TestOpenTaskInBrowser(t *testing.T) {
 	e.load(t)
 	e.press("2")
 	for i := 0; i < 5; i++ {
-		if r, _ := e.app.tasks.list.selected(); r.key == "t1" {
+		if r, _ := e.app.tasks.list.selected(); r.key == ref("t1") {
 			break
 		}
 		e.press("j")

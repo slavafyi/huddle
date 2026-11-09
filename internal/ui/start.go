@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -12,10 +13,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/slavafyi/huddle/internal/clickup"
 	"github.com/slavafyi/huddle/internal/launch"
 	"github.com/slavafyi/huddle/internal/rex"
 	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/task"
 	"github.com/slavafyi/huddle/internal/workspace"
 )
 
@@ -39,7 +40,7 @@ const (
 
 // startPanel is the Start task panel.
 type startPanel struct {
-	task       clickup.Task
+	task       task.Task
 	field      field
 	kind       workspace.Kind
 	repos      []workspace.Repo // ranked
@@ -63,8 +64,8 @@ type (
 		plan launch.Plan
 		err  error
 	}
-	// clickupDoneMsg: the launch's ClickUp writes finished.
-	clickupDoneMsg struct {
+	// appliedMsg: the launch's task writes finished.
+	appliedMsg struct {
 		taskKey  string
 		statusOp uint64
 		assignOp uint64
@@ -72,7 +73,7 @@ type (
 	}
 	// enterMsg is the answer to "does this task have a live tab?".
 	enterMsg struct {
-		taskID   string
+		ref      string       // task.Ref of the task
 		agent    *store.Agent // nil: no live tab, open the panel
 		err      error        // focus error, if any
 		checkErr error        // Rex could not be asked; do nothing
@@ -81,10 +82,10 @@ type (
 
 // enterTask focuses the newest live agent tab of a task, or opens the
 // Start panel when there is none.
-func (a *App) enterTask(t clickup.Task) tea.Cmd {
+func (a *App) enterTask(t task.Task) tea.Cmd {
 	var agents []store.Agent
 	for _, ag := range a.state.Agents {
-		if ag.TaskID == t.ID {
+		if ag.TaskRef() == t.Ref() {
 			agents = append(agents, ag)
 		}
 	}
@@ -100,14 +101,14 @@ func (a *App) enterTask(t clickup.Task) tea.Cmd {
 			ag := agents[i]
 			blocks, err := rx.Blocks(ctx, ag.SessionID)
 			if err != nil {
-				return enterMsg{taskID: t.ID, checkErr: err}
+				return enterMsg{ref: t.Ref(), checkErr: err}
 			}
 			if !blocks[ag.BlockID] {
 				continue
 			}
-			return enterMsg{taskID: t.ID, agent: &ag, err: rx.Focus(ctx, ag.SessionID, ag.WindowID)}
+			return enterMsg{ref: t.Ref(), agent: &ag, err: rx.Focus(ctx, ag.SessionID, ag.WindowID)}
 		}
-		return enterMsg{taskID: t.ID}
+		return enterMsg{ref: t.Ref()}
 	}
 }
 
@@ -117,7 +118,7 @@ func (a *App) onEnter(m enterMsg) tea.Cmd {
 		return nil
 	}
 	if m.agent == nil {
-		if t, ok := a.taskByID(m.taskID); ok && a.mode == modeNormal {
+		if t, ok := a.taskByRef(m.ref); ok && a.mode == modeNormal {
 			a.openStart(t)
 		}
 		return a.scanRepos(false)
@@ -133,26 +134,25 @@ func (a *App) onEnter(m enterMsg) tea.Cmd {
 	return nil
 }
 
-func (a *App) openStart(t clickup.Task) {
+func (a *App) openStart(t task.Task) {
 	cfg := a.deps.Config
-	me := a.cache.Me.ID
 	p := &startPanel{
 		task:   t,
-		repos:  workspace.RankRepos(a.cache.Repos, t.ListName, a.state.RecentRepos[t.ListName]),
-		branch: workspace.Expand(cfg.BranchTemplate, workspace.Vars{ID: t.Key(), Title: t.Name, URL: t.URL}),
+		repos:  workspace.RankRepos(a.cache.Repos, t.Project, a.state.RecentRepos[t.Project]),
+		branch: workspace.Expand(cfg.BranchTemplate, workspace.Vars{ID: t.Key, Title: t.Name, URL: t.URL}),
 		agents: cfg.AgentNames(),
-		prompt: workspace.Expand(cfg.PromptTemplate, workspace.Vars{ID: t.Key(), Title: t.Name, URL: t.URL}),
+		prompt: workspace.Expand(cfg.PromptTemplate, workspace.Vars{ID: t.Key, Title: t.Name, URL: t.URL}),
 	}
-	if clickup.WantsScratch(t, cfg.ScratchTypes, cfg.ScratchPrefixes) {
+	if task.WantsScratch(t, cfg.ScratchTypes, cfg.ScratchPrefixes) {
 		p.kind = workspace.Scratch
 	}
-	if t.Status == "to plan" || t.Status == "to start" {
+	if slices.Contains(a.rules[t.Source].Startable, t.Status) {
 		p.showMove, p.moveStatus = true, true
 	}
-	if !t.AssignedTo(me) {
+	if !t.Mine {
 		p.showAssign, p.assign = true, true
 	}
-	p.session = a.state.ClientSessions[t.ListName]
+	p.session = a.state.ClientSessions[t.Project]
 	a.start = p
 	a.mode = modeStart
 }
@@ -315,18 +315,18 @@ func (a *App) plan() (launch.Plan, string) {
 	}
 	prompt := strings.TrimSpace(p.prompt)
 	if prompt == "" {
-		prompt = workspace.Expand(cfg.PromptTemplate, workspace.Vars{ID: t.Key(), Title: t.Name, URL: t.URL})
+		prompt = workspace.Expand(cfg.PromptTemplate, workspace.Vars{ID: t.Key, Title: t.Name, URL: t.URL})
 	}
 	agent := p.agents[p.agentIdx]
 	lp := launch.Plan{
 		Task: t, Workspace: wp, AgentName: agent, Argv: launch.Argv(cfg.Agents, agent, prompt),
-		SessionID: p.session, TabName: t.Key() + " " + ansi.Truncate(t.Name, 40, "…"),
+		SessionID: p.session, TabName: t.Key + " " + ansi.Truncate(t.Name, 40, "…"),
 	}
 	if p.showMove && p.moveStatus {
-		lp.SetStatus = cfg.StatusInProgress
+		lp.SetStatus = a.rules[t.Source].MoveTo
 	}
 	if p.showAssign && p.assign {
-		lp.AssignMe = a.cache.Me.ID
+		lp.AssignMe = a.cache.Me[t.Source]
 	}
 	return lp, ""
 }
@@ -337,15 +337,16 @@ func (a *App) launch() tea.Cmd {
 		a.flash = sRed.Render(problem)
 		return nil
 	}
-	if a.launching[lp.Task.ID] {
-		a.flash = sYellow.Render("already starting " + lp.Task.Key() + "…")
+	ref := lp.Task.Ref()
+	if a.launching[ref] {
+		a.flash = sYellow.Render("already starting " + lp.Task.Key + "…")
 		return nil
 	}
-	a.lastStart[lp.Task.ID] = a.start
+	a.lastStart[ref] = a.start
 	a.mode, a.start = modeNormal, nil
-	a.launching[lp.Task.ID] = true
-	a.flash = sFaint.Render("starting " + lp.Task.Key() + "…")
-	d := launch.Deps{Runner: a.deps.Runner, Rex: a.deps.Rex, ClickUp: a.deps.ClickUp, Now: a.deps.Now}
+	a.launching[ref] = true
+	a.flash = sFaint.Render("starting " + lp.Task.Key + "…")
+	d := launch.Deps{Runner: a.deps.Runner, Rex: a.deps.Rex, Source: a.source(lp.Task.Source), Now: a.deps.Now}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -355,14 +356,14 @@ func (a *App) launch() tea.Cmd {
 }
 
 // onOpened records the agent as soon as its tab exists (SPEC §4.4 step 3),
-// then starts the ClickUp writes (step 4).
+// then starts the task writes (step 4).
 func (a *App) onOpened(m openedMsg) tea.Cmd {
-	id := m.plan.Task.ID
+	id := m.plan.Task.Ref()
 	panel := a.lastStart[id]
 	delete(a.launching, id)
 	delete(a.lastStart, id)
 	if m.err != nil {
-		a.flash = sRed.Render(m.plan.Task.Key() + ": " + m.err.Error())
+		a.flash = sRed.Render(m.plan.Task.Key + ": " + m.err.Error())
 		if a.mode == modeNormal && panel != nil {
 			a.start, a.mode = panel, modeStart // this task's panel, with its edits
 		}
@@ -380,32 +381,31 @@ func (a *App) onOpened(m openedMsg) tea.Cmd {
 	}
 	cmds := []tea.Cmd{a.saveState(), a.refreshAgents()}
 
-	// Show the ClickUp changes at once; undo each one that fails.
+	// Show the task changes at once; undo each one that fails.
 	p, t := m.plan, m.plan.Task
 	var statusOp, assignOp uint64
 	if p.SetStatus != "" {
-		cur, _ := a.taskByID(t.ID)
-		st, ok := a.statusInfo(t.ListID, p.SetStatus)
+		cur, _ := a.taskByRef(t.Ref())
+		st, ok := a.statusInfo(t, p.SetStatus)
 		if !ok {
-			st = clickup.Status{Name: p.SetStatus, Type: cur.StatusType, Order: cur.StatusOrder}
+			st = task.Status{Name: p.SetStatus, Order: cur.StatusOrder, Done: cur.IsDone()}
 		}
-		statusOp = a.newOp(t.ID, "status", setStatus(st, a.now()), setStatus(clickup.Status{Name: cur.Status, Type: cur.StatusType, Order: cur.StatusOrder}, cur.Done))
+		statusOp = a.newOp(t.Ref(), "status", setStatus(st, a.now()), setStatus(currentStatus(cur), cur.Done))
 	}
 	if p.AssignMe != 0 {
-		assignOp = a.newOp(t.ID, "assign", setAssigned(a.cache.Me, true), setAssigned(a.cache.Me, false))
+		assignOp = a.newOp(t.Ref(), "assign", setAssigned(true), setAssigned(false))
 	}
-	if statusOp != 0 || assignOp != 0 {
-		cu := a.deps.ClickUp
+	if src := a.source(t.Source); src != nil && (statusOp != 0 || assignOp != 0) {
 		cmds = append(cmds, func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
-			return clickupDoneMsg{taskKey: t.Key(), statusOp: statusOp, assignOp: assignOp, up: launch.ApplyClickUp(ctx, cu, p)}
+			return appliedMsg{taskKey: t.Key, statusOp: statusOp, assignOp: assignOp, up: launch.Apply(ctx, src, p)}
 		})
 	}
 	return tea.Batch(cmds...)
 }
 
-func (a *App) onClickupDone(m clickupDoneMsg) tea.Cmd {
+func (a *App) onApplied(m appliedMsg) tea.Cmd {
 	if m.statusOp != 0 {
 		a.finishOp(m.statusOp, m.up.StatusOK)
 	}
@@ -418,19 +418,19 @@ func (a *App) onClickupDone(m clickupDoneMsg) tea.Cmd {
 	return tea.Batch(a.saveCache(), a.refreshAfterWrite())
 }
 
-// statusInfo finds a status of a list among the statuses seen so far.
-func (a *App) statusInfo(listID, name string) (clickup.Status, bool) {
-	for _, s := range a.statuses[listID] {
+// statusInfo finds a status of t's list among the statuses seen so far.
+func (a *App) statusInfo(t task.Task, name string) (task.Status, bool) {
+	for _, s := range a.statuses[task.Ref(t.Source, t.ListID)] {
 		if s.Name == name {
 			return s, true
 		}
 	}
-	for _, t := range a.cache.Tasks {
-		if t.Status == name {
-			return clickup.Status{Name: name, Type: t.StatusType, Order: t.StatusOrder}, true
+	for _, o := range a.cache.Tasks {
+		if o.Source == t.Source && o.Status == name {
+			return currentStatus(o), true
 		}
 	}
-	return clickup.Status{}, false
+	return task.Status{}, false
 }
 
 func (a *App) renderStart(height int) []string {
@@ -456,8 +456,8 @@ func (a *App) renderStart(height int) []string {
 	}
 	lines := []string{
 		sBold.Render("Start task"),
-		sCyan.Render(t.Key()) + " " + t.Name,
-		sFaint.Render(t.ListName + " · " + t.Status),
+		sCyan.Render(t.Key) + " " + t.Name,
+		sFaint.Render(t.Project + " · " + t.Status),
 		"",
 		label(fWorkspace, "Workspace"),
 		"  " + opt(p.kind == workspace.Worktree, "worktree") + "  " + opt(p.kind == workspace.Checkout, "checkout") + "  " + opt(p.kind == workspace.Scratch, "scratch"),
@@ -496,9 +496,9 @@ func (a *App) renderStart(height int) []string {
 		}
 		lines = append(lines, sFaint.Render("  Folder"), "  "+sFaint.Render(parent), "  "+filepath.Base(dir))
 	}
-	where := "new tab in session " + sBold.Render(t.ListName) + sFaint.Render(" (created if missing)")
+	where := "new tab in session " + sBold.Render(t.Project) + sFaint.Render(" (created if missing)")
 	if p.session != "" {
-		where = "new tab in session " + sBold.Render(t.ListName)
+		where = "new tab in session " + sBold.Render(t.Project)
 	}
 	lines = append(lines, sFaint.Render("  Rex"), "  "+where)
 	var agents []string
@@ -526,7 +526,7 @@ func (a *App) renderStart(height int) []string {
 		lines = append(lines, label(fMove, check(p.moveStatus)+" Move to "+a.deps.Config.StatusInProgress))
 	}
 	if p.showAssign {
-		lines = append(lines, label(fAssign, check(p.assign)+" Assign to me"+sFaint.Render(" (now: "+clickup.With(t, a.cache.Me.ID)+")")))
+		lines = append(lines, label(fAssign, check(p.assign)+" Assign to me"+sFaint.Render(" (now: "+t.With()+")")))
 	}
 	lines = append(lines, "", sMagenta.Reverse(true).Bold(true).Render(" Launch ⏎ "))
 	for i, l := range lines {

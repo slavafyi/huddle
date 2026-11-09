@@ -18,7 +18,7 @@ func agentsEnv(t *testing.T) *testEnv {
 	}
 	e.rex.lines = map[string]string{"block:1": "› Running pnpm test…"}
 	add := func(task, key, block string, started time.Duration) {
-		e.app.state.AddAgent(store.Agent{TaskID: task, TaskKey: key, Title: key + " title", Client: "Snowcap",
+		e.app.state.AddAgent(store.Agent{Source: "clickup", TaskID: task, TaskKey: key, Title: key + " title", Client: "Snowcap",
 			Workspace: "Scratch", Dir: "/tmp/" + key, Agent: "claude", Started: testNow.Add(-started),
 			Placement: rex.Placement{SessionID: "session:S", WindowID: "window:" + block, BlockID: block}})
 	}

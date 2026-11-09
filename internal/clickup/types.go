@@ -1,10 +1,9 @@
-// Package clickup reads and writes ClickUp tasks and holds the rules that
-// decide which tasks show where.
+// Package clickup reads and writes ClickUp tasks and offers them as a
+// task.Source.
 package clickup
 
 import (
 	"context"
-	"strings"
 	"time"
 )
 
@@ -43,17 +42,11 @@ func (t Task) Key() string {
 	return t.ID
 }
 
-// KeyLower is Key in lowercase, for branch and folder names.
-func (t Task) KeyLower() string { return strings.ToLower(t.Key()) }
-
 // AssignedTo reports whether user id is an assignee.
 func (t Task) AssignedTo(id int64) bool { return hasUser(t.Assignees, id) }
 
 // LeadIs reports whether user id is in the Lead Assignee field.
 func (t Task) LeadIs(id int64) bool { return hasUser(t.Leads, id) }
-
-// IsDone reports whether the task is closed or in a done status.
-func (t Task) IsDone() bool { return !t.Done.IsZero() }
 
 func hasUser(us []User, id int64) bool {
 	for _, u := range us {

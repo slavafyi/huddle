@@ -9,9 +9,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/slavafyi/huddle/internal/clickup"
 	"github.com/slavafyi/huddle/internal/github"
 	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/task"
 	"github.com/slavafyi/huddle/internal/workspace"
 )
 
@@ -64,7 +64,7 @@ func reviewLabel(p github.PR) string {
 	return sFaint.Render("waiting")
 }
 
-func (v *prView) rebuild(prs []github.PR, tasks []clickup.Task, now time.Time) {
+func (v *prView) rebuild(prs []github.PR, tasks []task.Task, now time.Time) {
 	var secs []section
 	for _, g := range []struct {
 		name string
@@ -75,16 +75,12 @@ func (v *prView) rebuild(prs []github.PR, tasks []clickup.Task, now time.Time) {
 			if p.Kind != g.kind {
 				continue
 			}
-			task := sFaint.Render("none")
-			if id := github.LinkTask(p, tasks); id != "" {
-				for _, t := range tasks {
-					if t.ID == id {
-						task = sCyan.Render(t.Key())
-					}
-				}
+			linked := sFaint.Render("none")
+			if t, ok := github.LinkTask(p, tasks); ok {
+				linked = sCyan.Render(t.Key)
 			}
 			s.rows = append(s.rows, row{key: prKey(p), cells: []string{
-				sFaint.Render("#" + strconv.Itoa(p.Number)), p.Title, p.RepoName, task,
+				sFaint.Render("#" + strconv.Itoa(p.Number)), p.Title, p.RepoName, linked,
 				ciLabel(p.CI), reviewLabel(p), sFaint.Render(ago(now.Sub(p.Updated))),
 			}})
 		}
@@ -174,9 +170,9 @@ func (a *App) prKey(k string) tea.Cmd {
 }
 
 // taskPR returns the open PR linked to a task.
-func (a *App) taskPR(t clickup.Task) (github.PR, bool) {
+func (a *App) taskPR(t task.Task) (github.PR, bool) {
 	for _, p := range a.cache.PRs {
-		if p.Kind != github.Merged && github.LinkTask(p, []clickup.Task{t}) == t.ID {
+		if _, ok := github.LinkTask(p, []task.Task{t}); ok && p.Kind != github.Merged {
 			return p, true
 		}
 	}

@@ -93,16 +93,16 @@ func (a *App) lookup() agentLookup {
 	l := agentLookup{byTask: map[string]agentInfo{}}
 	for _, ag := range a.state.Agents {
 		i := a.agentInfo[ag.BlockID]
-		if cur, ok := l.byTask[ag.TaskID]; !ok || rank(i) > rank(cur) {
-			l.byTask[ag.TaskID] = i
+		if cur, ok := l.byTask[ag.TaskRef()]; !ok || rank(i) > rank(cur) {
+			l.byTask[ag.TaskRef()] = i
 		}
 	}
 	return l
 }
 
 // badge is shown after a task title in the Tasks view.
-func (l agentLookup) badge(taskID string) string {
-	i, ok := l.byTask[taskID]
+func (l agentLookup) badge(ref string) string {
+	i, ok := l.byTask[ref]
 	if !ok || rank(i) == 0 {
 		return ""
 	}
@@ -111,8 +111,8 @@ func (l agentLookup) badge(taskID string) string {
 }
 
 // state is the Today view's agent column.
-func (l agentLookup) state(taskID string) string {
-	i, ok := l.byTask[taskID]
+func (l agentLookup) state(ref string) string {
+	i, ok := l.byTask[ref]
 	if !ok || rank(i) == 0 {
 		return ""
 	}

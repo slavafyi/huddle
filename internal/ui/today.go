@@ -2,9 +2,10 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
-	"github.com/slavafyi/huddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/task"
 )
 
 // todayView is the Today tab.
@@ -22,9 +23,9 @@ func newTodayView() *todayView {
 
 var todayNotes = map[string]string{"Waiting on others": "you are lead, task is with someone else"}
 
-func (v *todayView) rebuild(tasks []clickup.Task, me int64, now time.Time, agents agentLookup) {
+func (v *todayView) rebuild(tasks []task.Task, rules map[string]task.Rules, now time.Time, agents agentLookup) {
 	var secs []section
-	for i, g := range clickup.Today(tasks, me, now) {
+	for i, g := range task.Today(tasks, rules, now) {
 		v.counts[i] = len(g.Tasks)
 		if len(g.Tasks) == 0 {
 			continue
@@ -34,19 +35,19 @@ func (v *todayView) rebuild(tasks []clickup.Task, me int64, now time.Time, agent
 			var when, state string
 			switch g.Name {
 			case "Waiting on others":
-				when = statusStyle(t.Status).Render(t.Status) // who has it: see the detail area
+				when = statusStyle(t.Status, false).Render(t.Status) // who has it: see the detail area
 			case "Done this week":
 				when = sFaint.Render(t.Done.In(now.Location()).Format("Jan 2"))
 				state = sGreen.Render("✓ " + t.Status)
 			default:
 				when = fmtDue(t.Due, now)
-				state = agents.state(t.ID)
-				if t.Status == "feedbacks" {
-					state = sRed.Render("feedbacks")
+				state = agents.state(t.Ref())
+				if slices.Contains(rules[t.Source].Alert, t.Status) {
+					state = sRed.Render(t.Status)
 				}
 			}
-			s.rows = append(s.rows, row{key: t.ID, cells: []string{
-				sFaint.Render(t.Key()), prioMark(t.Priority) + t.Name, t.ListName, when, state,
+			s.rows = append(s.rows, row{key: t.Ref(), cells: []string{
+				sFaint.Render(t.Key), prioMark(t.Priority) + t.Name, t.Project, when, state,
 			}})
 		}
 		secs = append(secs, s)

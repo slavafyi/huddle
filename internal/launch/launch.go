@@ -1,5 +1,5 @@
 // Package launch starts an agent on a task: it prepares the folder, opens a
-// Rex tab, and updates ClickUp.
+// Rex tab, and updates the task in its source.
 package launch
 
 import (
@@ -9,24 +9,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/slavafyi/huddle/internal/clickup"
 	"github.com/slavafyi/huddle/internal/rex"
 	"github.com/slavafyi/huddle/internal/run"
 	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/task"
 	"github.com/slavafyi/huddle/internal/workspace"
 )
 
 // Deps are the services a launch uses.
 type Deps struct {
-	Runner  run.Runner
-	Rex     rex.Client
-	ClickUp clickup.Client
-	Now     func() time.Time
+	Runner run.Runner
+	Rex    rex.Client
+	Source task.Source // the task's source
+	Now    func() time.Time
 }
 
 // Plan is everything the Start panel decided.
 type Plan struct {
-	Task      clickup.Task
+	Task      task.Task
 	Workspace workspace.Plan
 	AgentName string
 	Argv      []string // nil opens a shell
@@ -42,7 +42,7 @@ type Result struct {
 	Warnings []string
 }
 
-// Updates reports which ClickUp writes succeeded.
+// Updates reports which task writes succeeded.
 type Updates struct {
 	StatusOK bool
 	AssignOK bool
@@ -80,7 +80,7 @@ func clientSession(sessions map[string]string, stored, client string) string {
 
 // Open prepares the folder and opens the agent's tab (SPEC §4.4 steps 1–2).
 // It stops at the first error, with no rollback. The caller saves the
-// returned agent record (step 3) before calling ApplyClickUp (step 4).
+// returned agent record (step 3) before calling Apply (step 4).
 func Open(ctx context.Context, d Deps, p Plan) (Result, error) {
 	dir, err := workspace.Prepare(ctx, d.Runner, p.Workspace)
 	if err != nil {
@@ -91,19 +91,19 @@ func Open(ctx context.Context, d Deps, p Plan) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("list Rex sessions: %w", err)
 	}
-	session := clientSession(sessions, p.SessionID, p.Task.ListName)
+	session := clientSession(sessions, p.SessionID, p.Task.Project)
 	var pl rex.Placement
 	if session != "" {
 		pl, err = d.Rex.NewWindow(ctx, session, p.TabName, dir, p.Argv)
 	} else {
-		pl, err = d.Rex.NewSession(ctx, p.Task.ListName, dir, p.TabName, p.Argv)
+		pl, err = d.Rex.NewSession(ctx, p.Task.Project, dir, p.TabName, p.Argv)
 	}
 	if err != nil {
 		return Result{}, fmt.Errorf("open Rex tab: %w", err)
 	}
 
 	res := Result{Agent: store.Agent{
-		TaskID: p.Task.ID, TaskKey: p.Task.Key(), Title: p.Task.Name, Client: p.Task.ListName,
+		Source: p.Task.Source, TaskID: p.Task.ID, TaskKey: p.Task.Key, Title: p.Task.Name, Client: p.Task.Project,
 		Workspace: p.Workspace.Kind.ID(), Dir: dir, Agent: p.AgentName,
 		Placement: pl, Started: d.Now(),
 	}}
@@ -125,19 +125,19 @@ func Open(ctx context.Context, d Deps, p Plan) (Result, error) {
 	return res, nil
 }
 
-// ApplyClickUp moves the task and assigns me, as the plan says. It stops at
-// the first failure.
-func ApplyClickUp(ctx context.Context, cu clickup.Client, p Plan) Updates {
+// Apply moves the task and assigns me in its source, as the plan says. It
+// stops at the first failure.
+func Apply(ctx context.Context, src task.Source, p Plan) Updates {
 	var u Updates
 	if p.SetStatus != "" {
-		if err := cu.SetStatus(ctx, p.Task.ID, p.SetStatus); err != nil {
+		if err := src.SetStatus(ctx, p.Task, p.SetStatus); err != nil {
 			u.Warnings = append(u.Warnings, "move to "+p.SetStatus+": "+err.Error())
 			return u
 		}
 		u.StatusOK = true
 	}
 	if p.AssignMe != 0 {
-		if err := cu.SetAssignee(ctx, p.Task.ID, p.AssignMe, true); err != nil {
+		if err := src.SetAssignee(ctx, p.Task, p.AssignMe, true); err != nil {
 			u.Warnings = append(u.Warnings, "assign: "+err.Error())
 			return u
 		}

@@ -9,7 +9,7 @@ import (
 )
 
 func withAgent(e *testEnv, taskID, block string) {
-	e.app.state.AddAgent(store.Agent{TaskID: taskID, TaskKey: "DEV-7700", Client: "Snowcap",
+	e.app.state.AddAgent(store.Agent{Source: "clickup", TaskID: taskID, TaskKey: "DEV-7700", Client: "Snowcap",
 		Placement: rex.Placement{SessionID: "session:S", WindowID: "window:" + block, BlockID: block}})
 }
 

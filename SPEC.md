@@ -60,11 +60,15 @@ last 7 days.
 | Waiting on others | I'm lead, not assignee, `to review` / `pending` / `to publish` |
 | Done this week | closed in the last 7 days |
 
+The status words above are ClickUp's: each task source supplies its own
+(`task.Rules`), so groups work the same for any source.
+
 ### 4.3 Task actions
 
 - Change status (options from the API), comment, assign/unassign me, open in
   browser, copy branch name.
-- Writes show at once, then go to ClickUp. On failure, undo and show the error.
+- Writes show at once, then go to the task's source (ClickUp). On failure,
+  undo and show the error.
 
 ### 4.4 Start a task
 
@@ -119,12 +123,14 @@ No match → no task.
 Show cache first, refresh in the background: tasks every 3 min and after
 writes (incremental with `date_updated_gt`, full every 30 min); PRs every
 90 s; repo list daily. Agents are live, not cached. When offline, show cached
-data and say so.
+data and say so. A full refresh of one task source replaces only that
+source's tasks; a source that fails keeps its cached tasks.
 
 ### 4.8 Colors
 
 Only the 16 ANSI colors plus bold / faint / reverse, so the terminal theme
-(light or dark) decides the real colors. No hex or 256 colors.
+(light or dark) decides the real colors. No hex or 256 colors. Status colors
+go by status name; unknown names are green when done, else faint.
 
 ## 5. Config and files
 
@@ -159,7 +165,8 @@ go vet ./... && gofmt -l .   # must be clean / print nothing
 
 ```
 cmd/huddle/          main
-internal/clickup/    API client + task rules (§4.1–4.2, pure functions)
+internal/task/       source-neutral task, Source interface, rules (§4.1–4.2)
+internal/clickup/    API client + ClickUp as a task Source
 internal/github/     gh calls + PR → task link
 internal/rex/        rex calls + events
 internal/workspace/  repos, branch names, worktree/scratch
@@ -286,8 +293,9 @@ github_account = "slavafyi"
 
 ### 14.4 Build order
 
-1. Common item type; ClickUp behind a source interface (no visible change;
-   existing tests stay green).
+1. **Built.** Common item type; ClickUp behind a source interface (no
+   visible change; existing tests stay green). Tasks and agent records are
+   keyed by source + ID (state file version 2; older agents are ClickUp).
 2. Profiles in config, header, picker, `-p`; per-profile cache and state.
 3. GitHub issues source.
 4. ClickUp auto-detect for workspace and lead field.

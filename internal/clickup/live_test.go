@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/slavafyi/huddle/internal/task"
 )
 
 // TestLiveReadOnly checks parsing against the real API. It only reads.
@@ -16,29 +18,30 @@ func TestLiveReadOnly(t *testing.T) {
 	c := &HTTP{BaseURL: DefaultBaseURL, Token: os.Getenv("CLICKUP_API_TOKEN"),
 		TeamID: os.Getenv("HUDDLE_TEAM"), LeadFieldID: os.Getenv("HUDDLE_LEAD_FIELD")}
 	ctx := context.Background()
-	me, err := c.Me(ctx)
+	src := &Source{Client: c}
+	me, err := src.Me(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	tasks, err := c.MyTasks(ctx, me.ID, time.Time{}, now)
+	tasks, err := src.Fetch(ctx, me, time.Time{}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var leadOnly, done, typed int
 	for _, tk := range tasks {
-		if tk.LeadIs(me.ID) && !tk.AssignedTo(me.ID) {
+		if tk.Lead && !tk.Mine {
 			leadOnly++
 		}
 		if tk.IsDone() {
 			done++
 		}
-		if tk.TypeName != "" {
+		if tk.Type != "" {
 			typed++
 		}
 	}
-	t.Logf("me=%s tasks=%d leadOnly=%d done=%d withType=%d", me.Username, len(tasks), leadOnly, done, typed)
-	for _, g := range Today(tasks, me.ID, now) {
+	t.Logf("me=%d tasks=%d leadOnly=%d done=%d withType=%d", me, len(tasks), leadOnly, done, typed)
+	for _, g := range task.Today(tasks, map[string]task.Rules{SourceName: src.Rules()}, now) {
 		t.Logf("  %s: %d", g.Name, len(g.Tasks))
 	}
 	if len(tasks) == 0 {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/slavafyi/huddle/internal/rex"
+	"github.com/slavafyi/huddle/internal/task"
 )
 
 func TestRememberRepo(t *testing.T) {
@@ -28,5 +29,19 @@ func TestAddAndRemoveAgent(t *testing.T) {
 	s.RemoveAgent("block:1")
 	if len(s.Agents) != 1 || s.Agents[0].TaskID != "t2" {
 		t.Errorf("agents = %+v", s.Agents)
+	}
+}
+
+func TestMigrateV1AgentsAreClickUp(t *testing.T) {
+	s := State{Version: 1, Agents: []Agent{{TaskID: "t1"}, {TaskID: "gh1", Source: "github"}}}
+	s.Migrate()
+	if s.Version != StateVersion || StateVersion != 2 {
+		t.Errorf("version = %d", s.Version)
+	}
+	if s.Agents[0].Source != "clickup" || s.Agents[1].Source != "github" {
+		t.Errorf("agents = %+v", s.Agents)
+	}
+	if s.Agents[0].TaskRef() != task.Ref("clickup", "t1") {
+		t.Errorf("ref = %q", s.Agents[0].TaskRef())
 	}
 }

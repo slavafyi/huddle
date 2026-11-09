@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/slavafyi/huddle/internal/task"
 )
 
 // DefaultBaseURL is the ClickUp REST API v2.
@@ -103,7 +105,7 @@ func (c *HTTP) MyTasks(ctx context.Context, me int64, since, now time.Time) ([]T
 			open.Set("include_closed", "false")
 			done := clone(w)
 			done.Set("include_closed", "true")
-			done.Set("date_done_gt", ms(now.Add(-DoneWindow)))
+			done.Set("date_done_gt", ms(now.Add(-task.DoneWindow)))
 			queries = append(queries, open, done)
 		} else {
 			q := clone(w)

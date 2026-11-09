@@ -12,6 +12,7 @@ import (
 	"github.com/slavafyi/huddle/internal/rex"
 	"github.com/slavafyi/huddle/internal/run"
 	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/task"
 	"github.com/slavafyi/huddle/internal/workspace"
 )
 
@@ -23,13 +24,16 @@ func TestStaleRefreshDoesNotRevertWrite(t *testing.T) {
 	selectTask(t, e, "t2")
 	// A refresh that started before the write (seq 0) and still has the old
 	// status arrives after the write succeeded.
-	old := append([]clickup.Task(nil), e.cu.tasks...)
+	var old []task.Task
+	for _, tk := range e.cu.tasks {
+		old = append(old, clickup.ToTask(tk, me.ID))
+	}
 	e.app.loadingTasks = true  // that refresh is still running…
 	e.press("s", "j", "enter") // …when the status write succeeds
 	if status(e, "t2") != "in progress" {
 		t.Fatalf("status = %q", status(e, "t2"))
 	}
-	e.app.Update(tasksMsg{me: me, tasks: old, at: testNow, seq: 0})
+	e.app.Update(tasksMsg{results: []fetched{{source: clickup.SourceName, me: me.ID, tasks: old}}, at: testNow, seq: 0})
 	if s := status(e, "t2"); s != "in progress" {
 		t.Errorf("stale refresh reverted the write: %q", s)
 	}
@@ -62,7 +66,7 @@ func TestUndoOnlyTheFailedField(t *testing.T) {
 	if tk.Status != "pending" {
 		t.Errorf("status not undone: %q", tk.Status)
 	}
-	if !tk.AssignedTo(me.ID) {
+	if !tk.Mine {
 		t.Error("undo of the status wiped the assign")
 	}
 }
@@ -123,8 +127,8 @@ func TestStatusFailureDuringLaunchDoesNotShowAssign(t *testing.T) {
 	selectTask(t, e, "t3")
 	e.press("enter", "ctrl+s")
 	tk, _ := e.app.taskByID("t3")
-	if tk.AssignedTo(me.ID) || tk.Status != "to start" {
-		t.Errorf("failed launch writes still shown: status=%q assigned=%v", tk.Status, tk.AssignedTo(me.ID))
+	if tk.Mine || tk.Status != "to start" {
+		t.Errorf("failed launch writes still shown: status=%q assigned=%v", tk.Status, tk.Mine)
 	}
 	if !strings.Contains(plain(e), "400 bad status") {
 		t.Errorf("warning not shown:\n%s", plain(e))
@@ -178,16 +182,16 @@ func TestRexErrorDoesNotLookLikeClosedTabs(t *testing.T) {
 func TestEnterResultDoesNotTakeOverOtherMode(t *testing.T) {
 	e := newEnv(t)
 	e.load(t)
-	e.app.Update(enterMsg{taskID: "t2"}) // arrives while…
-	e.app.mode = modeComment             // …the user started a comment
-	e.app.Update(enterMsg{taskID: "t2"})
+	e.app.Update(enterMsg{ref: ref("t2")}) // arrives while…
+	e.app.mode = modeComment               // …the user started a comment
+	e.app.Update(enterMsg{ref: ref("t2")})
 	if e.app.mode != modeComment {
 		t.Errorf("mode = %v", e.app.mode)
 	}
 }
 
 func mergedAgent(task, dir, block, repo, branch string) store.Agent {
-	return store.Agent{TaskID: task, TaskKey: task, Workspace: workspace.Worktree.ID(), Repo: repo, Branch: branch, Dir: dir,
+	return store.Agent{Source: "clickup", TaskID: task, TaskKey: task, Workspace: workspace.Worktree.ID(), Repo: repo, Branch: branch, Dir: dir,
 		Placement: rex.Placement{SessionID: "session:S", WindowID: "window:" + block, BlockID: block}}
 }
 

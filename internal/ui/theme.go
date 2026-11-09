@@ -19,8 +19,9 @@ var (
 	sTabOn   = lipgloss.NewStyle().Foreground(lipgloss.Blue).Bold(true)
 )
 
-// statusStyle returns the style for a ClickUp status name.
-func statusStyle(status string) lipgloss.Style {
+// statusStyle returns the style for a status name. Names it doesn't know
+// are green when done, else faint.
+func statusStyle(status string, done bool) lipgloss.Style {
 	switch status {
 	case "to start":
 		return sGreen
@@ -35,6 +36,9 @@ func statusStyle(status string) lipgloss.Style {
 	case "published":
 		return sBold
 	case "Closed", "closed", "complete":
+		return sGreen
+	}
+	if done {
 		return sGreen
 	}
 	return sFaint

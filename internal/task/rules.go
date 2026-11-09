@@ -1,6 +1,7 @@
-package clickup
+package task
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -18,44 +19,28 @@ type Group struct {
 
 // Relevant reports whether a task belongs in huddle: I'm an assignee or the
 // lead, and it is open or was done in the last 7 days.
-func Relevant(t Task, me int64, now time.Time) bool {
-	if !t.AssignedTo(me) && !t.LeadIs(me) {
+func Relevant(t Task, now time.Time) bool {
+	if !t.Mine && !t.Lead {
 		return false
 	}
 	return !t.IsDone() || now.Sub(t.Done) <= DoneWindow
 }
 
-// With names who has the task now: "you", the assignees' names, or "nobody".
-func With(t Task, me int64) string {
-	if t.AssignedTo(me) {
-		return "you"
-	}
-	if len(t.Assignees) == 0 {
-		return "nobody"
-	}
-	names := make([]string, len(t.Assignees))
-	for i, u := range t.Assignees {
-		names[i] = u.Username
-	}
-	return strings.Join(names, ", ")
-}
-
-var waitingStatuses = map[string]bool{"to review": true, "pending": true, "to publish": true}
-
-// Today groups tasks for the Today view.
-func Today(tasks []Task, me int64, now time.Time) []Group {
+// Today groups tasks for the Today view, using each task's source rules.
+func Today(tasks []Task, rules map[string]Rules, now time.Time) []Group {
 	var g [4][]Task
 	for _, t := range tasks {
+		r := rules[t.Source]
 		switch {
 		case t.IsDone():
 			if now.Sub(t.Done) <= DoneWindow {
 				g[3] = append(g[3], t)
 			}
-		case t.AssignedTo(me) && (t.Status == "in progress" || t.Status == "feedbacks"):
+		case t.Mine && slices.Contains(r.Active, t.Status):
 			g[0] = append(g[0], t)
-		case t.AssignedTo(me) && t.Status == "to start":
+		case t.Mine && slices.Contains(r.Next, t.Status):
 			g[1] = append(g[1], t)
-		case t.LeadIs(me) && !t.AssignedTo(me) && waitingStatuses[t.Status]:
+		case t.Lead && !t.Mine && slices.Contains(r.Waiting, t.Status):
 			g[2] = append(g[2], t)
 		}
 	}
@@ -110,16 +95,16 @@ func (f TaskFilter) String() string {
 }
 
 // Filter applies f to tasks.
-func Filter(tasks []Task, me int64, f TaskFilter) []Task {
+func Filter(tasks []Task, f TaskFilter) []Task {
 	var out []Task
 	for _, t := range tasks {
 		switch f {
 		case FilterAssigned:
-			if !t.AssignedTo(me) {
+			if !t.Mine {
 				continue
 			}
 		case FilterLeadOnly:
-			if t.AssignedTo(me) || !t.LeadIs(me) {
+			if t.Mine || !t.Lead {
 				continue
 			}
 		}
@@ -128,26 +113,35 @@ func Filter(tasks []Task, me int64, f TaskFilter) []Task {
 	return out
 }
 
-// Merge combines cached tasks with fetched ones. A full fetch replaces the
-// cache. An incremental fetch replaces tasks by ID and adds new ones. Either
-// way, only relevant tasks are kept.
-func Merge(cached, fetched []Task, full bool, me int64, now time.Time) []Task {
+// Merge combines cached tasks with tasks fetched from one source. A full
+// fetch replaces that source's cached tasks. An incremental fetch replaces
+// tasks by ID and adds new ones. Other sources' tasks are kept as they are.
+// Either way, only relevant tasks of the source are kept.
+func Merge(cached, fetched []Task, source string, full bool, now time.Time) []Task {
+	var out []Task
 	byID := map[string]Task{}
-	if !full {
-		for _, t := range cached {
+	for _, t := range cached {
+		switch {
+		case t.Source != source:
+			out = append(out, t)
+		case !full:
 			byID[t.ID] = t
 		}
 	}
 	for _, t := range fetched {
 		byID[t.ID] = t
 	}
-	out := make([]Task, 0, len(byID))
 	for _, t := range byID {
-		if Relevant(t, me, now) {
+		if Relevant(t, now) {
 			out = append(out, t)
 		}
 	}
-	sort.Slice(out, func(a, b int) bool { return out[a].ID < out[b].ID })
+	sort.Slice(out, func(a, b int) bool {
+		if out[a].Source != out[b].Source {
+			return out[a].Source < out[b].Source
+		}
+		return out[a].ID < out[b].ID
+	})
 	return out
 }
 
@@ -155,7 +149,7 @@ func Merge(cached, fetched []Task, full bool, me int64, now time.Time) []Task {
 // its type is one of types, or its title starts with one of prefixes.
 func WantsScratch(t Task, types, prefixes []string) bool {
 	for _, ty := range types {
-		if strings.EqualFold(t.TypeName, ty) {
+		if strings.EqualFold(t.Type, ty) {
 			return true
 		}
 	}

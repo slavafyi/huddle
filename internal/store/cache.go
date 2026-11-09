@@ -4,19 +4,20 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/slavafyi/huddle/internal/clickup"
 	"github.com/slavafyi/huddle/internal/github"
+	"github.com/slavafyi/huddle/internal/task"
 	"github.com/slavafyi/huddle/internal/workspace"
 )
 
-// CacheVersion is the current cache file format.
-const CacheVersion = 1
+// CacheVersion is the current cache file format. Version 2 holds
+// source-neutral tasks.
+const CacheVersion = 2
 
-// Cache is data fetched from ClickUp and GitHub. It is safe to delete.
+// Cache is data fetched from task sources and GitHub. It is safe to delete.
 type Cache struct {
 	Version       int              `json:"version"`
-	Me            clickup.User     `json:"me"`
-	Tasks         []clickup.Task   `json:"tasks"`
+	Me            map[string]int64 `json:"me"` // my user ID, by source
+	Tasks         []task.Task      `json:"tasks"`
 	TasksSyncedAt time.Time        `json:"tasks_synced_at,omitzero"`
 	TasksFullAt   time.Time        `json:"tasks_full_at,omitzero"`
 	Repos         []workspace.Repo `json:"repos"`

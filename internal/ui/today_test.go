@@ -40,7 +40,7 @@ func TestTaskActionsWorkFromToday(t *testing.T) {
 	e.cu.statuses = listStatuses
 	e.load(t)
 	// First row of Today is DEV-7808 (in progress).
-	if r, _ := e.app.today.list.selected(); r.key != "t1" {
+	if r, _ := e.app.today.list.selected(); r.key != ref("t1") {
 		t.Fatalf("selected %s", r.key)
 	}
 	e.press("s")

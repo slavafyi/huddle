@@ -27,7 +27,7 @@ const taskJSON = `{
   ]
 }`
 
-func task(id, cid, name string) string {
+func jsonTask(id, cid, name string) string {
 	return sprintf(taskJSON, id, cid, name, id)
 }
 
@@ -66,11 +66,11 @@ func (f *fakeAPI) handler(t *testing.T) http.Handler {
 			page := q.Get("page")
 			switch {
 			case q.Get("custom_fields") != "" && page == "0":
-				io.WriteString(w, `{"tasks": [`+task("t2", "DEV-2", "Lead task")+`], "last_page": false}`)
+				io.WriteString(w, `{"tasks": [`+jsonTask("t2", "DEV-2", "Lead task")+`], "last_page": false}`)
 			case q.Get("custom_fields") != "" && page == "1":
-				io.WriteString(w, `{"tasks": [`+task("t3", "DEV-3", "Lead task 2")+`], "last_page": true}`)
+				io.WriteString(w, `{"tasks": [`+jsonTask("t3", "DEV-3", "Lead task 2")+`], "last_page": true}`)
 			default:
-				io.WriteString(w, `{"tasks": [`+task("t1", "DEV-1", "Mine")+`,`+task("t2", "DEV-2", "Lead task")+`], "last_page": true}`)
+				io.WriteString(w, `{"tasks": [`+jsonTask("t1", "DEV-1", "Mine")+`,`+jsonTask("t2", "DEV-2", "Lead task")+`], "last_page": true}`)
 			}
 		case r.URL.Path == "/list/900":
 			io.WriteString(w, `{"statuses": [{"status": "to start", "type": "unstarted", "orderindex": 1}, {"status": "in progress", "type": "custom", "orderindex": 2}]}`)
@@ -156,7 +156,7 @@ func TestTaskTypesRetryAfterFailure(t *testing.T) {
 			}
 			io.WriteString(w, `{"custom_items": [{"id": 1005, "name": "Idea"}]}`)
 		default:
-			io.WriteString(w, `{"tasks": [`+task("t1", "DEV-1", "x")+`], "last_page": true}`)
+			io.WriteString(w, `{"tasks": [`+jsonTask("t1", "DEV-1", "x")+`], "last_page": true}`)
 		}
 	}))
 	defer srv.Close()
