@@ -14,7 +14,7 @@ type keyHelp struct{ key, what string }
 
 var (
 	taskKeys = []keyHelp{
-		{"j / k", "move"},
+		{"j/k ctrl+n/p", "move"},
 		{"enter", "start / focus agent"},
 		{"shift+enter", "start another agent"},
 		{"s", "status"},
@@ -25,7 +25,7 @@ var (
 	panelKeys = []keyHelp{
 		{"tab", "next field"},
 		{"space / ←→", "change value"},
-		{"↑↓", "move in list"},
+		{"↑↓ ctrl+n/p", "move in list"},
 		{"enter", "launch"},
 		{"esc", "close"},
 	}
@@ -45,9 +45,9 @@ func (a *App) viewKeys() (string, []keyHelp) {
 	case TabTasks:
 		return a.tasks.title, append(append([]keyHelp(nil), taskKeys...), keyHelp{"t", "filter"})
 	case TabPRs:
-		return "PRs", []keyHelp{{"j / k", "move"}, {"enter", "diff in a Rex tab"}, {"o", "open on GitHub"}}
+		return "PRs", []keyHelp{{"j/k ctrl+n/p", "move"}, {"enter", "diff in a Rex tab"}, {"o", "open on GitHub"}}
 	case TabAgents:
-		return "Agents", []keyHelp{{"j / k", "move"}, {"enter", "focus tab"}, {"x", "close tab"}, {"X", "clean merged"}}
+		return "Agents", []keyHelp{{"j/k ctrl+n/p", "move"}, {"enter", "focus tab"}, {"x", "close tab"}, {"X", "clean merged"}}
 	}
 	return "Today", taskKeys
 }

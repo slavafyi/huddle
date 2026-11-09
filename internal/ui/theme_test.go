@@ -92,3 +92,36 @@ func TestStatusPickerCtrlNP(t *testing.T) {
 		t.Errorf("ctrl+p: back to %d, got %d", c, e.app.picker.cursor)
 	}
 }
+
+// ctrl+n / ctrl+p work like ↓ / ↑ in every list and in the Start panel.
+func TestCtrlNPMoveLikeArrows(t *testing.T) {
+	ctrl := func(r rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: r, Mod: tea.ModCtrl} }
+	e := newEnv(t)
+	e.load(t)
+	for _, view := range []string{"1", "2"} {
+		e.press(view)
+		l := &e.app.today.list
+		if view == "2" {
+			l = &e.app.tasks.list
+		}
+		first, _ := l.selected()
+		e.app.Update(ctrl('n'))
+		if r, _ := l.selected(); r.key == first.key {
+			t.Errorf("view %s: ctrl+n did not move", view)
+		}
+		e.app.Update(ctrl('p'))
+		if r, _ := l.selected(); r.key != first.key {
+			t.Errorf("view %s: ctrl+p did not move back", view)
+		}
+	}
+	selectTask(t, e, "t2")
+	e.press("enter", "tab") // → repo
+	e.app.Update(ctrl('n'))
+	if e.app.start.repoIdx != 1 {
+		t.Errorf("panel ctrl+n: repo %d", e.app.start.repoIdx)
+	}
+	e.app.Update(ctrl('p'))
+	if e.app.start.repoIdx != 0 || e.app.start.field != fRepo {
+		t.Errorf("panel ctrl+p: repo %d field %v", e.app.start.repoIdx, e.app.start.field)
+	}
+}

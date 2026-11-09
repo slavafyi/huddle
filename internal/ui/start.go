@@ -244,7 +244,7 @@ func cycle(i, d, n int) int {
 
 func (a *App) startKey(msg tea.KeyPressMsg) tea.Cmd {
 	p := a.start
-	k := msg.String()
+	k := emacsArrow(msg.String())
 	switch k {
 	case "esc":
 		a.mode, a.start = modeNormal, nil

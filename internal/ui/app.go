@@ -426,6 +426,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+// emacsArrow maps ctrl+n / ctrl+p to down / up, so they move like the
+// arrows in lists and the Start panel.
+func emacsArrow(k string) string {
+	switch k {
+	case "ctrl+n":
+		return "down"
+	case "ctrl+p":
+		return "up"
+	}
+	return k
+}
+
 func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	k := msg.String()
 	switch a.mode {
@@ -443,6 +455,7 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case modeProfile:
 		return a.profileKey(msg)
 	}
+	k = emacsArrow(k)
 	switch k {
 	case "?":
 		a.mode = modeHelp
