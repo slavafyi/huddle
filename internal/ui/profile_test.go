@@ -56,7 +56,7 @@ func TestProfilePickerOrderAndFilter(t *testing.T) {
 		t.Errorf("order = %q, want recent first then file order", got)
 	}
 	out := plain(e)
-	for _, want := range []string{"Profile", "1 work", "ClickUp · vertexdigital", "2 personal", "GitHub · slavafyi"} {
+	for _, want := range []string{"Profile", "1 ● work", "ClickUp · vertexdigital", "2   personal", "GitHub · slavafyi"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("picker missing %q:\n%s", want, out)
 		}
@@ -150,9 +150,9 @@ func TestBacktickWithoutOtherProfile(t *testing.T) {
 	}
 }
 
-// The profile picker looks like the status picker: number, name, faint
-// summary, "(current)"; what you type shows after the title; the grey
-// cursor starts on the next profile.
+// The profile picker looks like the status picker: number, icon (● on the
+// current profile), name, summary right-aligned; what you type shows after
+// the title; the grey cursor starts on the next profile.
 func TestProfilePickerLayout(t *testing.T) {
 	e := withProfiles(t)
 	e.press("P")
@@ -164,14 +164,18 @@ func TestProfilePickerLayout(t *testing.T) {
 	for i, l := range lines {
 		plainLines[i] = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(ansi.Strip(l)), "│ "), " │")
 	}
-	want := []string{"Profile", "1 work", "2 personal", "3 oss"}
+	want := []string{"Profile", "1 ● work", "2   personal", "3   oss"}
 	for i, w := range want {
 		if got := strings.TrimSpace(plainLines[i+1]); !strings.HasPrefix(got, w) {
 			t.Errorf("line %d = %q, want prefix %q", i+1, got, w)
 		}
 	}
-	if !strings.Contains(plainLines[2], "ClickUp · vertexdigital (current)") || strings.Contains(strings.Join(plainLines, "\n"), "●") {
-		t.Errorf("current profile row: %q", plainLines[2])
+	if strings.Contains(strings.Join(plainLines, "\n"), "(current)") {
+		t.Errorf("● marks the current profile, not (current): %q", plainLines)
+	}
+	end := func(l, s string) int { return ansi.StringWidth(l[:strings.Index(l, s)]) + ansi.StringWidth(s) }
+	if end(plainLines[2], "vertexdigital") != end(plainLines[3], "slavafyi") {
+		t.Errorf("summaries not right-aligned: %q", plainLines[2:4])
 	}
 	if !strings.Contains(lines[3], selBG) || strings.Contains(lines[2], selBG) {
 		t.Errorf("grey cursor not on the next profile")
@@ -186,8 +190,8 @@ func TestProfilePickerFitsAt80Columns(t *testing.T) {
 	e := withProfiles(t)
 	e.app.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
 	e.press("P")
-	line := lineWith(plain(e), "1 work")
-	if !strings.Contains(line, "ClickUp · vertexdigital (current)") || strings.Contains(line, "…") {
+	line := lineWith(plain(e), "1 ● work")
+	if !strings.Contains(line, "ClickUp · vertexdigital") || strings.Contains(line, "…") {
 		t.Errorf("current profile line cut: %q\n%s", line, plain(e))
 	}
 }

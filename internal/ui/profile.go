@@ -117,9 +117,9 @@ func (a *App) switchProfile(name string) tea.Cmd {
 // "" when the user quit.
 func (a *App) SwitchTo() string { return a.switchTo }
 
-// renderProfilePicker draws the P popup in the status picker's style:
-// what you type after the title, rows "1 work   summary (current)", the
-// grey cursor row.
+// renderProfilePicker draws the P popup like the status picker: what you
+// type after the title, rows "1 ● work … summary" (● on the current
+// profile, summary right-aligned), the grey cursor row.
 func (a *App) renderProfilePicker() []string {
 	p := &a.profilePicker
 	const width = 52
@@ -129,17 +129,15 @@ func (a *App) renderProfilePicker() []string {
 	if len(shown) == 0 {
 		lines = append(lines, sFaint.Render("no match"))
 	}
-	nameW := 10
-	for _, pr := range shown {
-		nameW = max(nameW, ansi.StringWidth(pr.Name))
-	}
 	for i, pr := range shown {
-		left := fmt.Sprintf("%d %-*s ", i+1, nameW, pr.Name)
-		sum := pr.Summary()
+		icon := " "
 		if pr.Name == a.deps.Profile {
-			sum += " (current)"
+			icon = sGreen.Render("●")
 		}
-		line := left + sFaint.Render(ansi.Truncate(sum, inner-ansi.StringWidth(left), "…"))
+		left := fmt.Sprintf("%d ", i+1) + icon + " " + pr.Name
+		w := ansi.StringWidth(left)
+		sum := ansi.Truncate(pr.Summary(), inner-w-1, "…")
+		line := left + strings.Repeat(" ", max(1, inner-w-ansi.StringWidth(sum))) + sFaint.Render(sum)
 		if i == p.cursor {
 			line = selected(line, inner)
 		}
