@@ -225,3 +225,69 @@ Live checks (read-only, or throwaway Rex sessions) run with
 
 Focusing a tab in the Mac app uses the `session.select` client action, so
 Rex **Remote Control** must be on. If it's off, show a hint.
+
+## 14. Next: profiles and GitHub issues (planned, not built)
+
+Decided 2026-11-10.
+
+**Goal:** cuddle works for work (ClickUp) and personal / open-source
+(GitHub issues) without mixing them, with a short config.
+
+### 14.1 Profiles
+
+- A profile is one named world: its sources, GitHub account, cache and
+  Rex sessions. Only one profile is shown at a time.
+- The header shows the current one after the title: `cuddle · work`. The
+  Rex tab title is `CUddle · work`.
+- `P` opens a picker: type to filter, `enter` switches, `1–9` jump, most
+  recently used first. `cuddle -p personal` starts in a profile; without
+  `-p`, the last used one.
+- Each source keeps its own status words. No shared "stages" to map.
+
+### 14.2 Config
+
+```toml
+[work]
+github_account = "slavafyi"         # optional, default: gh's active account
+github_orgs    = ["vertexdigital"]  # GitHub items in these orgs belong here
+# found automatically; set only to override:
+# clickup_workspace = "1234567"
+# clickup_lead      = "11111111-…"
+
+[personal]
+github_account = "slavafyi"
+```
+
+- A profile with `clickup_*` (or a ClickUp token) shows ClickUp tasks.
+- **GitHub split:** issues and PRs in a profile's `github_orgs` belong to
+  that profile. A profile without `github_orgs` gets every other issue
+  and PR assigned to or opened by its account (any repo, open-source too).
+  No repo lists.
+- **`github_account`:** cuddle calls `gh` with that account's token
+  (`gh auth token --user NAME`), so `gh auth switch` elsewhere doesn't
+  change what a profile shows. Each profile can use a different account.
+- **ClickUp auto-detect** (checked 2026-11-10): the workspace is the only
+  one the token can see (`GET /team`); the lead field is the one "users"
+  custom field whose name contains "lead" (`GET /team/{id}/field`). None
+  found → lead features off. Several → ask to set it. Cached after the
+  first start; a warning if it stops matching.
+
+### 14.3 GitHub issues in the views
+
+- ID `repo#42`; the group column is the repo; priority from labels
+  (`priority:high`, `priority:urgent`) with the same `!` / `!!` marks.
+- Today: **In progress** (has an agent tab or my open PR), **Open**,
+  **In review** (open PR waiting), **Done this week** (closed ≤ 7 days).
+- Tasks: filters **Assigned** / **Opened by me**.
+- Start panel: the repo is known, so no repo picker; cuddle finds the
+  local clone by its git remote. Branch `feature/{number}-{slug}`, Rex
+  session named after the repo, no "Move to" row.
+- PRs link to issues by "Fixes #42" or the issue number in the branch.
+
+### 14.4 Build order
+
+1. Common item type; ClickUp behind a source interface (no visible change;
+   existing tests stay green).
+2. Profiles in config, header, picker, `-p`; per-profile cache and state.
+3. GitHub issues source.
+4. ClickUp auto-detect for workspace and lead field.
