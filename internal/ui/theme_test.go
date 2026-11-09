@@ -25,3 +25,21 @@ func TestActiveTabAndFilterAreBoldNotColored(t *testing.T) {
 		}
 	}
 }
+
+// Every picker uses the list's grey selection; the Start panel keeps its
+// bold › repo instead (no grey there).
+func TestSameSelectionEverywhere(t *testing.T) {
+	e := newEnv(t)
+	e.cu.statuses = listStatuses
+	e.load(t)
+	e.press("2", "s")
+	if out := strings.Join(e.app.renderPicker(), "\n"); !strings.Contains(out, selBG) || strings.Contains(out, "7m") {
+		t.Errorf("status picker: %q", out)
+	}
+	e.press("esc")
+	selectTask(t, e, "t2")
+	e.press("enter", "tab") // → repo list
+	if out := strings.Join(e.app.renderStart(40), "\n"); strings.Contains(out, selBG) || !strings.Contains(out, "› snowcap") {
+		t.Errorf("panel repo list: %q", out)
+	}
+}

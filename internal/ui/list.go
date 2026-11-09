@@ -117,7 +117,7 @@ func (l *list) render(width, height int) string {
 		for _, c := range l.cols {
 			cells = append(cells, c.title)
 		}
-		lines = append(lines, sFaint.Render(l.line(cells, widths)))
+		lines = append(lines, sFaint.Render(l.line(cells, widths, " ")))
 	}
 	i := 0
 	for si, s := range l.sections {
@@ -138,13 +138,9 @@ func (l *list) render(width, height int) string {
 		for _, r := range s.rows {
 			if i == l.sel {
 				selLine = len(lines)
-				plain := make([]string, len(r.cells))
-				for j, c := range r.cells {
-					plain[j] = ansi.Strip(c)
-				}
-				lines = append(lines, sSel.Render(l.line(plain, widths)))
+				lines = append(lines, selected(l.line(r.cells, widths, "›"), width))
 			} else {
-				lines = append(lines, l.line(r.cells, widths))
+				lines = append(lines, l.line(r.cells, widths, " "))
 			}
 			i++
 		}
@@ -161,7 +157,7 @@ func (l *list) render(width, height int) string {
 
 func (l *list) widths(total int) []int {
 	ws := make([]int, len(l.cols))
-	used := 2 + 2*(len(l.cols)-1) // left margin + gaps
+	used := 4 + 2*(len(l.cols)-1) // left margin (› column + indent) + gaps
 	flex := -1
 	for i, c := range l.cols {
 		if c.width == 0 && flex < 0 {
@@ -193,9 +189,11 @@ func (l *list) widths(total int) []int {
 	return ws
 }
 
-func (l *list) line(cells []string, widths []int) string {
+// line is one row: mark (› or space) in column 0, cells from column 4,
+// indented under the section titles at column 2.
+func (l *list) line(cells []string, widths []int, mark string) string {
 	var b strings.Builder
-	b.WriteString("  ")
+	b.WriteString(mark + "   ")
 	for i, w := range widths {
 		if w <= 0 {
 			continue

@@ -194,7 +194,9 @@ Meaning never depends on blue, yellow, magenta or cyan alone (they are
 grey in some themes, e.g. koda-dark): the active tab and filter are bold
 (inactive faint). The cursor row has an ANSI 8 (bright black) background
 across the full width; it keeps its colors (red date, status), faint text
-turns normal.
+turns normal. The same grey
+marks the cursor in every list and picker (profile, status); the Start
+panel's repo list keeps a bold `›` instead.
 
 **List layout:** group titles start at column 2; rows are indented under
 them, cells from column 4; the selected row has `›` in column 0.

@@ -162,7 +162,7 @@ func TestProfilePickerLayout(t *testing.T) {
 	if len(rows) != 3 {
 		t.Fatalf("rows: %q", rows)
 	}
-	if !strings.Contains(rows[1], "7m") || strings.Contains(rows[0], "7m") {
+	if !strings.Contains(rows[1], "100m") || strings.Contains(rows[0], "100m") {
 		t.Errorf("cursor row not reversed: %q", rows)
 	}
 	// col is the display column where s starts in row r.

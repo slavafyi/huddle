@@ -88,3 +88,35 @@ func TestNarrowWidthShrinksFixedColumns(t *testing.T) {
 		t.Errorf("columns not shrunk sensibly:\n%s", plain)
 	}
 }
+
+// Titles at column 2, rows from column 4, › on the selected row; the
+// selection is a full-width grey (ANSI 8) background that keeps colors
+// and turns faint text normal (SPEC §4.8).
+func TestListLayoutAndSelection(t *testing.T) {
+	l := &list{cols: []column{{width: 4}, {}, {width: 6}}}
+	l.setSections([]section{{title: "a", rows: []row{
+		{key: "1", cells: []string{sFaint.Render("1"), "first", sRed.Render("Nov 2")}},
+		{key: "2", cells: []string{sFaint.Render("2"), "second", "x"}},
+	}}})
+	lines := strings.Split(l.render(40, 10), "\n")
+	plain := make([]string, len(lines))
+	for i, s := range lines {
+		plain[i] = ansi.Strip(s)
+	}
+	if !strings.HasPrefix(plain[0], "  a 1") && !strings.HasPrefix(plain[0], "  a 2") {
+		t.Errorf("title not at column 2: %q", plain[0])
+	}
+	if !strings.HasPrefix(plain[1], "›   1") || !strings.HasPrefix(plain[2], "    2") {
+		t.Errorf("rows not at column 4 / no ›: %q %q", plain[1], plain[2])
+	}
+	sel := lines[1]
+	if !strings.Contains(sel, "100m") || strings.Contains(sel, "7m") {
+		t.Errorf("selection not grey: %q", sel)
+	}
+	if !strings.Contains(sel, "31m") || strings.Contains(sel, "\x1b[2m") {
+		t.Errorf("selection must keep red and drop faint: %q", sel)
+	}
+	if w := ansi.StringWidth(sel); w != 40 {
+		t.Errorf("selection width %d, want full 40", w)
+	}
+}

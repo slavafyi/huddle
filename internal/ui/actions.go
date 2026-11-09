@@ -207,7 +207,7 @@ func (a *App) renderPicker() []string {
 			line += sFaint.Render(" (current)")
 		}
 		if i == a.picker.cursor {
-			line = sBold.Render(line)
+			line = selected(line, 44-4)
 		}
 		lines = append(lines, line)
 	}

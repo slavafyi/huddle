@@ -136,14 +136,14 @@ func (a *App) renderProfilePicker() []string {
 		left := fmt.Sprintf("%d %-12s", i+1, pr.Name)
 		sum := ansi.Truncate(pr.Summary(), inner-len(mark)-ansi.StringWidth(left)-1, "…")
 		gap := strings.Repeat(" ", max(1, inner-len([]rune(mark))-ansi.StringWidth(left)-ansi.StringWidth(sum)))
-		if i == p.cursor {
-			lines = append(lines, sSel.Bold(true).Render(mark+left+gap+sum))
-			continue
-		}
 		if mark != "  " {
 			mark = sGreen.Render("●") + " "
 		}
-		lines = append(lines, mark+left+gap+sFaint.Render(sum))
+		line := mark + left + gap + sFaint.Render(sum)
+		if i == p.cursor {
+			line = selected(line, inner)
+		}
+		lines = append(lines, line)
 	}
 	return box(lines, width)
 }
