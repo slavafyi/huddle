@@ -39,7 +39,7 @@ func (v *taskView) rebuild(tasks []task.Task, now time.Time, agents agentLookup)
 		s := section{title: g.Name, style: statusStyle(g.Name, false).Render}
 		for _, t := range g.Tasks {
 			s.rows = append(s.rows, row{key: t.Ref(), cells: []string{
-				sFaint.Render(t.Key), prioMark(t.Priority) + t.Name + agents.badge(t.Ref()), t.Project, fmtDue(t.Due, now),
+				sFaint.Render(listKey(t)), prioMark(t.Priority) + t.Name + agents.badge(t.Ref()), t.Project, fmtDue(t.Due, now),
 			}})
 		}
 		secs = append(secs, s)

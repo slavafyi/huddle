@@ -63,7 +63,7 @@ func selectToday(t *testing.T, e *testEnv, ref string) {
 func TestTodayMixesClickUpAndIssueGroups(t *testing.T) {
 	e := withIssues(t)
 	out := plain(e)
-	order := []string{"In progress 2", "DEV-7808", "shop#44", "In review 1", "shop#43", "Up next 2", "Open 2", "shop#42", "Waiting on others 1", "Done this week 1"}
+	order := []string{"In progress 2", "DEV-7808", "#44", "In review 1", "#43", "Up next 2", "Open 2", "#42", "Waiting on others 1", "Done this week 1"}
 	pos := -1
 	for _, want := range order {
 		i := strings.Index(out, want)
@@ -82,6 +82,32 @@ func TestTodayMixesClickUpAndIssueGroups(t *testing.T) {
 	if out := plain(e); !strings.Contains(out, "All 8") || !strings.Contains(out, "Lead / opened") {
 		t.Errorf("mixed filter labels:\n%s", out)
 	}
+}
+
+func TestListRowsShowShortIssueIDs(t *testing.T) {
+	e := withIssues(t)
+	selectToday(t, e, task.Ref(github.IssuesSource, "acme/shop#42"))
+	for _, view := range []string{"1", "2"} {
+		e.press(view)
+		out := plain(e)
+		row := lineWith(out, "Fix checkout")
+		if !strings.Contains(row, "#42") || strings.Contains(row, "shop#42") || !strings.Contains(row, "shop") {
+			t.Errorf("view %s row %q", view, row)
+		}
+		if !strings.Contains(lineWith(out, "DEV-7808"), "DEV-7808") {
+			t.Errorf("view %s: ClickUp ID changed", view)
+		}
+	}
+}
+
+// lineWith returns the first line of out that contains s.
+func lineWith(out, s string) string {
+	for _, l := range strings.Split(out, "\n") {
+		if strings.Contains(l, s) {
+			return l
+		}
+	}
+	return ""
 }
 
 func TestStartPanelForIssue(t *testing.T) {

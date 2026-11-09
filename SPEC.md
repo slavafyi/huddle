@@ -55,8 +55,8 @@ last 7 days.
 `github_issues = false`): open issues assigned to me or opened by me, plus
 those closed in the last 7 days, in the profile's org scope (§5). For
 GitHub, "lead" means **opened by me**. Shown as `repo#42` (internal ID
-`owner/repo#42`, unique ref `github:owner/repo#42`); the group column is the
-repo; priority from labels `priority:high` / `priority:urgent` (same `!` /
+`owner/repo#42`, unique ref `github:owner/repo#42`); list rows show just
+`#42`, since the group column is the repo; priority from labels `priority:high` / `priority:urgent` (same `!` /
 `!!` marks); statuses `open` / `closed`. One `gh api graphql` search per
 refresh (first 100 per query); incremental refreshes use
 `updated:>=<since>`.

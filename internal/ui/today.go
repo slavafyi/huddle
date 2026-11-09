@@ -55,7 +55,7 @@ func (v *todayView) rebuild(tasks []task.Task, rules map[string]task.Rules, sig 
 				}
 			}
 			s.rows = append(s.rows, row{key: t.Ref(), cells: []string{
-				sFaint.Render(t.Key), prioMark(t.Priority) + t.Name, t.Project, when, state,
+				sFaint.Render(listKey(t)), prioMark(t.Priority) + t.Name, t.Project, when, state,
 			}})
 		}
 		secs = append(secs, s)

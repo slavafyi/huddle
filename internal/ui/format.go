@@ -2,8 +2,21 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/slavafyi/huddle/internal/github"
+	"github.com/slavafyi/huddle/internal/task"
 )
+
+// listKey is a task's ID in list rows. A GitHub issue shows only "#42":
+// the group column already names the repo.
+func listKey(t task.Task) string {
+	if i := strings.LastIndex(t.Key, "#"); t.Source == github.IssuesSource && i >= 0 {
+		return t.Key[i:]
+	}
+	return t.Key
+}
 
 // fmtDue shows a due date: red when overdue, yellow for today, "—" if none.
 func fmtDue(due, now time.Time) string {
