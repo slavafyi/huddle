@@ -230,30 +230,15 @@ func (a *App) startKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		p.change(d)
 		return nil
-	case "ctrl+n", "ctrl+p":
-		if p.field == fRepo {
-			d := 1
-			if k == "ctrl+p" {
-				d = -1
-			}
-			p.repoIdx = cycle(p.repoIdx, d, len(p.filtered()))
-		}
+	}
+	// space changes the value: next option, toggled checkbox, or next repo
+	// (repo names have no spaces, so the filter doesn't need one).
+	if k == "space" && (p.field.isChoice() || p.field == fRepo) {
+		p.change(1)
 		return nil
 	}
-	// Choice fields have no text, so letters can navigate: j/k move between
-	// fields, h/l/space change the value.
 	if p.field.isChoice() {
-		switch k {
-		case "j":
-			p.moveField(1)
-		case "k":
-			p.moveField(-1)
-		case "l", "space":
-			p.change(1)
-		case "h":
-			p.change(-1)
-		}
-		return nil
+		return nil // no text to type here
 	}
 	switch k {
 	case "backspace":
@@ -474,11 +459,11 @@ func (a *App) renderStart(height int) []string {
 		sCyan.Render(t.Key()) + " " + t.Name,
 		sFaint.Render(t.ListName + " · " + t.Status),
 		"",
-		label(fWorkspace, "Workspace · h/l"),
+		label(fWorkspace, "Workspace · space"),
 		"  " + opt(p.kind == workspace.Worktree, "worktree") + "  " + opt(p.kind == workspace.Checkout, "checkout") + "  " + opt(p.kind == workspace.Scratch, "scratch"),
 	}
 	if p.kind != workspace.Scratch {
-		head := "Repo · type to filter · ctrl+n/p pick"
+		head := "Repo · type to filter · space next"
 		if p.repoFilter != "" {
 			head = "Repo · filter: " + p.repoFilter + caret(fRepo)
 		}
@@ -520,7 +505,7 @@ func (a *App) renderStart(height int) []string {
 	for i, n := range p.agents {
 		agents = append(agents, opt(i == p.agentIdx, n))
 	}
-	lines = append(lines, label(fAgent, "Agent · h/l"), "  "+strings.Join(agents, "  "))
+	lines = append(lines, label(fAgent, "Agent · space"), "  "+strings.Join(agents, "  "))
 	lines = append(lines, label(fPrompt, "Prompt"))
 	// Wrap the prompt so all of it shows; keep the end (where you type)
 	// when it is very long.
@@ -543,7 +528,7 @@ func (a *App) renderStart(height int) []string {
 	if p.showAssign {
 		lines = append(lines, label(fAssign, check(p.assign)+" Assign to me"+sFaint.Render(" (now: "+clickup.With(t, a.cache.Me.ID)+")")))
 	}
-	lines = append(lines, "", sMagenta.Reverse(true).Bold(true).Render(" Launch · ctrl-s ")+sFaint.Render("  esc · tab/j/k field · h/l value"))
+	lines = append(lines, "", sMagenta.Reverse(true).Bold(true).Render(" Launch · ctrl-s ")+sFaint.Render("  esc close · tab field · space value"))
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, inner, "…")
 	}

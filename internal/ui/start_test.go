@@ -158,48 +158,38 @@ func TestLaunchErrorKeepsPanelClosedAndShowsError(t *testing.T) {
 	}
 }
 
-func TestPanelKeysWithoutArrows(t *testing.T) {
+func TestPanelTabAndSpace(t *testing.T) {
 	e := newEnv(t)
 	e.load(t)
 	selectTask(t, e, "t2")
 	e.press("enter")
 	p := e.app.start
-	e.press("l") // workspace: worktree → checkout
+	e.press("space") // workspace: worktree → checkout
 	if p.kind != workspace.Checkout {
-		t.Fatalf("l: kind = %v", p.kind)
+		t.Fatalf("space: kind = %v", p.kind)
 	}
-	e.press("h", "space") // back to worktree, then space → checkout
-	if p.kind != workspace.Checkout {
-		t.Fatalf("h/space: kind = %v", p.kind)
+	e.press("h", "j", "k", "l") // letters do nothing on a choice field
+	if p.kind != workspace.Checkout || p.field != fWorkspace {
+		t.Fatalf("letters changed the panel: kind=%v field=%v", p.kind, p.field)
 	}
-	e.press("j") // → repo field
-	if p.field != fRepo {
-		t.Fatalf("j: field = %v", p.field)
-	}
+	e.press("tab") // → repo
 	first, _ := p.repo()
-	e.press("ctrl+n")
-	if r, _ := p.repo(); r.Name == first.Name {
-		t.Error("ctrl+n did not pick the next repo")
+	e.press("space")
+	if r, _ := p.repo(); r.Name == first.Name || p.repoFilter != "" {
+		t.Errorf("space in repo: picked %q, filter %q", r.Name, p.repoFilter)
 	}
-	e.press("ctrl+p")
-	if r, _ := p.repo(); r.Name != first.Name {
-		t.Error("ctrl+p did not go back")
-	}
-	e.press("j") // typed into the filter, not a field move
-	if p.field != fRepo || p.repoFilter != "j" {
-		t.Errorf("j in repo filter: field=%v filter=%q", p.field, p.repoFilter)
+	e.press("j") // letters filter repos
+	if p.repoFilter != "j" {
+		t.Errorf("filter = %q", p.repoFilter)
 	}
 	e.press("backspace", "tab") // → agent (checkout has no branch)
-	if p.field != fAgent {
-		t.Fatalf("tab: field = %v", p.field)
-	}
-	e.press("l")
+	e.press("space")
 	if p.agents[p.agentIdx] != "codex" {
-		t.Errorf("l on agent: %s", p.agents[p.agentIdx])
+		t.Errorf("space on agent: %s", p.agents[p.agentIdx])
 	}
-	e.press("k") // back to repo
+	e.press("shift+tab")
 	if p.field != fRepo {
-		t.Errorf("k: field = %v", p.field)
+		t.Errorf("shift+tab: field = %v", p.field)
 	}
 }
 
