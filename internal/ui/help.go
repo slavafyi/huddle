@@ -24,7 +24,8 @@ var (
 	}
 	panelKeys = []keyHelp{
 		{"tab", "next field"},
-		{"space", "change value"},
+		{"space / ←→", "change value"},
+		{"↑↓", "move in list"},
 		{"enter", "launch"},
 		{"esc", "close"},
 	}

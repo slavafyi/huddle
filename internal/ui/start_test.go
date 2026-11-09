@@ -78,9 +78,9 @@ func TestPanelEditing(t *testing.T) {
 	if r, _ := p.repo(); r.Name != "snowcap-subscriptions" {
 		t.Errorf("filtered repo = %q", r.Name)
 	}
-	e.press("backspace", "backspace", "backspace", "right")
+	e.press("backspace", "backspace", "backspace", "down")
 	if r, _ := p.repo(); r.Name == "snowcap" {
-		t.Errorf("right should move to the next repo, still %q", r.Name)
+		t.Errorf("down should move to the next repo, still %q", r.Name)
 	}
 	e.press("esc")
 	if e.app.mode != modeNormal || len(e.rex.calls) != 0 {
@@ -174,16 +174,19 @@ func TestPanelTabAndSpace(t *testing.T) {
 		t.Fatalf("letters changed the panel: kind=%v field=%v", p.kind, p.field)
 	}
 	e.press("tab") // → repo
-	first, _ := p.repo()
-	e.press("space")
-	if r, _ := p.repo(); r.Name == first.Name || p.repoFilter != "" {
-		t.Errorf("space in repo: picked %q, filter %q", r.Name, p.repoFilter)
+	e.press("s", "n", "down")
+	if r, _ := p.repo(); p.repoIdx != 1 || !strings.Contains(r.Name, "sn") {
+		t.Errorf("down in matches: idx %d repo %q", p.repoIdx, r.Name)
 	}
-	e.press("j") // letters filter repos
-	if p.repoFilter != "j" {
-		t.Errorf("filter = %q", p.repoFilter)
+	e.press("up", "space") // space is text in the filter
+	if p.repoFilter != "sn " || p.repoIdx != 0 {
+		t.Errorf("filter = %q idx %d", p.repoFilter, p.repoIdx)
 	}
-	e.press("backspace", "tab") // → agent (checkout has no branch)
+	e.press("left", "right") // no field change, no list move
+	if p.field != fRepo || p.repoIdx != 0 {
+		t.Errorf("left/right: field %v idx %d", p.field, p.repoIdx)
+	}
+	e.press("backspace", "backspace", "backspace", "tab") // → agent (checkout has no branch)
 	e.press("space")
 	if p.agents[p.agentIdx] != "codex" {
 		t.Errorf("space on agent: %s", p.agents[p.agentIdx])
@@ -253,5 +256,38 @@ func TestEmptyRepoFilterShowsNoQuotes(t *testing.T) {
 	e.press("enter", "tab") // → repo, nothing typed
 	if out := plain(e); strings.Contains(out, `""`) || !strings.Contains(out, "› Repo") {
 		t.Errorf("empty filter:\n%s", out)
+	}
+}
+
+// Arrows never move between fields; they work inside the field.
+func TestArrowsStayInField(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t2")
+	e.press("enter")
+	p := e.app.start
+	e.press("down") // workspace: next option, not the next field
+	if p.field != fWorkspace || p.kind != workspace.Scratch {
+		t.Errorf("down on workspace: field %v kind %v", p.field, p.kind)
+	}
+	e.press("up", "tab", "tab") // checkout → agent
+	if p.field != fAgent {
+		t.Fatalf("field %v", p.field)
+	}
+	e.press("down") // the row below: claude → opencode
+	if p.agents[p.agentIdx] != "opencode" {
+		t.Errorf("down on agent: %s", p.agents[p.agentIdx])
+	}
+	e.press("up", "right")
+	if p.agents[p.agentIdx] != "codex" {
+		t.Errorf("up, right on agent: %s", p.agents[p.agentIdx])
+	}
+	e.press("tab", "up", "down") // prompt: arrows do nothing
+	if p.field != fPrompt {
+		t.Errorf("arrows left the prompt: %v", p.field)
+	}
+	e.press("tab", "down") // move checkbox toggles
+	if p.field != fMove || p.moveStatus {
+		t.Errorf("down on checkbox: field %v move %v", p.field, p.moveStatus)
 	}
 }

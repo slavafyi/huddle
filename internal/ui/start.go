@@ -251,23 +251,18 @@ func (a *App) startKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "enter", "ctrl+s": // all fields are one line, so enter launches
 		return a.launch()
-	case "tab", "down":
+	case "tab":
 		p.moveField(1)
 		return nil
-	case "shift+tab", "up":
+	case "shift+tab":
 		p.moveField(-1)
 		return nil
-	case "left", "right":
-		d := 1
-		if k == "left" {
-			d = -1
-		}
-		p.change(d)
+	case "up", "down", "left", "right":
+		p.arrow(k) // arrows work inside the field, never between fields
 		return nil
 	}
-	// space changes the value: next option, toggled checkbox, or next repo
-	// (repo names have no spaces, so the filter doesn't need one).
-	if k == "space" && (p.field.isChoice() || p.field == fRepo) {
+	// space changes a choice; in the repo filter it is text.
+	if k == "space" && p.field.isChoice() {
 		p.change(1)
 		return nil
 	}
@@ -299,6 +294,32 @@ func (a *App) startKey(msg tea.KeyPressMsg) tea.Cmd {
 		p.prompt += msg.Text
 	}
 	return nil
+}
+
+// arrow handles an arrow key inside the current field (SPEC §16.1).
+func (p *startPanel) arrow(k string) {
+	back := k == "up" || k == "left"
+	d := 1
+	if back {
+		d = -1
+	}
+	switch p.field {
+	case fWorkspace, fMove, fAssign:
+		p.change(d)
+	case fAgent:
+		if k == "up" || k == "down" {
+			d *= 3 // the row above or below
+			if i := p.agentIdx + d; i >= 0 && i < len(p.agents) {
+				p.agentIdx = i
+			}
+			return
+		}
+		p.change(d)
+	case fRepo:
+		if k == "up" || k == "down" {
+			p.change(d)
+		}
+	}
 }
 
 // isChoice reports whether a field has options instead of text.
