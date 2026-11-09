@@ -476,7 +476,7 @@ them into Today (the "Open" group) is noise.
 2. **Built.** Tabs per source and Today = main source (§4.2). Cache
    version 4 (issue labels). Issues show UPDATED age, not created age.
 
-## 16. Start panel, more agents, profile toggle (step 4 planned)
+## 16. Start panel, more agents, profile toggle (done; steps 1–4 built)
 
 Decided 2026-11-09. §4.4 holds the
 defaults; the layout below is the current behavior.
@@ -508,7 +508,8 @@ Replaces an earlier, busier layout.
   - `[x] Move to …` / `[x] Assign to me` as label-style lines.
 - Bottom: `Launch ⏎`.
 - Short terminal: the prompt shrinks (down to 1 line), then blank lines
-  go; `Launch ⏎` always shows.
+  go one by one from the bottom; if still too tall the middle is cut. The
+  checkbox rows and `Launch ⏎` always show.
 - Keys unchanged: `tab` / `shift+tab` move, `space` / `←→` change,
   `enter` launches. Workspace default: **checkout**.
 
@@ -543,4 +544,4 @@ other profile". `P` stays for the picker. Listed in `?`.
 1. **Built.** Agents and prompts (§16.2–16.3).
 2. **Built.** Profile toggle (§16.4); `?` says "last profile".
 3. **Built.** First Start panel and checkout default.
-4. Current Start panel (§16.1), replacing the first one.
+4. **Built.** Current Start panel (§16.1), replacing the first one.

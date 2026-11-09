@@ -34,7 +34,7 @@ func TestEnterOpensStartPanelWithDefaults(t *testing.T) {
 		t.Errorf("move=%v showAssign=%v", p.moveStatus, p.showAssign)
 	}
 	out := plain(e)
-	for _, want := range []string{"Start", "DEV-7700", "WHERE", "AGENT", "PROMPT", "● checkout", "snowcap", "Take a task DEV-7700 from CU", "Rex", "Snowcap › new tab", "[x] Move to in progress", "Launch ⏎", "┌──"} {
+	for _, want := range []string{"Start", "DEV-7700", "● checkout", "snowcap", "type to filter", "Take a task DEV-7700 from CU", "Rex", "Snowcap › new tab", "[x] Move to in progress", "Launch ⏎", "┄┄┄"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("panel missing %q:\n%s", want, out)
 		}
@@ -222,10 +222,36 @@ func TestShortPanelKeepsLaunch(t *testing.T) {
 	e.load(t)
 	selectTask(t, e, "t2")
 	e.press("enter")
-	for _, h := range []int{40, 24, 18} {
+	for _, h := range []int{40, 24, 18, 12} {
 		lines := e.app.renderStart(h)
-		if len(lines) > h || !strings.Contains(strings.Join(lines, "\n"), "Launch ⏎") {
+		all := strings.Join(lines, "\n")
+		if !strings.Contains(all, "Move to in progress") {
+			t.Errorf("height %d: checkbox cut:\n%s", h, all)
+		}
+		if len(lines) > h || !strings.Contains(all, "Launch ⏎") {
 			t.Errorf("height %d: %d lines, launch shown=%v", h, len(lines), strings.Contains(strings.Join(lines, "\n"), "Launch ⏎"))
 		}
+	}
+}
+
+func TestLongBranchWrapsInPanel(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t2")
+	e.press("enter", "left") // worktree
+	e.app.start.branch = "feature/dev-7700-promo-checkout-personalisation-and-more-words-END"
+	out := plain(e)
+	if !strings.Contains(out, "feature/dev-7700-") || !strings.Contains(out, "words-END") {
+		t.Errorf("branch cut instead of wrapped:\n%s", out)
+	}
+}
+
+func TestEmptyRepoFilterShowsNoQuotes(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t2")
+	e.press("enter", "tab") // → repo, nothing typed
+	if out := plain(e); strings.Contains(out, `""`) || !strings.Contains(out, "› Repo") {
+		t.Errorf("empty filter:\n%s", out)
 	}
 }

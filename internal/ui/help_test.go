@@ -29,18 +29,18 @@ func TestPanelHasNoKeyHints(t *testing.T) {
 	selectTask(t, e, "t2")
 	e.press("enter")
 	out := plain(e)
-	for _, hint := range []string{"· space", "tab field", "esc close", "type to filter", "ctrl+n"} {
+	for _, hint := range []string{"· space", "tab field", "esc close", "ctrl+n"} {
 		if strings.Contains(out, hint) {
 			t.Errorf("panel shows %q:\n%s", hint, out)
 		}
 	}
-	for _, label := range []string{"Workspace", "Repo", "AGENT", "PROMPT", "Launch ⏎"} {
+	for _, label := range []string{"Workspace", "Repo", "Agent", "Prompt", "Launch ⏎"} {
 		if !strings.Contains(out, label) {
 			t.Errorf("panel missing %q", label)
 		}
 	}
 	e.press("tab", "s", "u", "b")
-	if !strings.Contains(plain(e), `Repo      "sub"▏`) {
+	if out := plain(e); !strings.Contains(out, "› Repo  sub▏") || strings.Contains(out, `"`) {
 		t.Errorf("filter not shown:\n%s", plain(e))
 	}
 }
