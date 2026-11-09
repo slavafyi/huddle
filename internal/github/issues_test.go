@@ -159,7 +159,7 @@ func TestIssuesStatusesAndRules(t *testing.T) {
 		t.Fatalf("statuses = %v, %v", st, err)
 	}
 	r := newIssues(&run.Fake{}).Rules()
-	if len(r.Startable) != 0 || !r.RepoInList || r.BranchTemplate != "feature/{number}-{slug}" || r.PromptTemplate != "Take issue {full_id}" {
+	if len(r.Startable) != 0 || !r.RepoInList || r.BranchTemplate != "feature/{number}-{slug}" || r.PromptTemplate != "Take an issue #{number}" || r.ScratchPromptTemplate != "Take an issue {full_id}" {
 		t.Errorf("rules = %+v", r)
 	}
 	s := task.Signals{Live: map[string]bool{"github:a/b#1": true}, InReview: map[string]bool{"github:a/b#2": true}}

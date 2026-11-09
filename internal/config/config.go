@@ -108,8 +108,11 @@ func Default() Config {
 		ScratchPrefixes:  []string{"research", "evaluate", "investigate", "check", "audit"},
 		StatusInProgress: "in progress",
 		Agents: map[string][]string{
-			"claude": {"claude", "{prompt}"},
-			"codex":  {"codex", "{prompt}"},
+			"claude":   {"claude", "{prompt}"},
+			"codex":    {"codex", "{prompt}"},
+			"pi":       {"pi", "{prompt}"},
+			"opencode": {"opencode", "--prompt", "{prompt}"},
+			"cursor":   {"cursor-agent", "{prompt}"},
 		},
 	}
 }
@@ -275,20 +278,25 @@ func (c Config) BaseBranch(repo string) string {
 	return c.Repos.BaseBranch[repo]
 }
 
-// AgentNames lists agents for the Start panel: claude first, then the others
-// sorted, then the plain shell.
+// builtinAgents are the default agents, in Start panel order.
+var builtinAgents = []string{"claude", "codex", "pi", "opencode", "cursor"}
+
+// AgentNames lists agents for the Start panel: the built-in ones in their
+// order, then your own sorted, then the plain shell.
 func (c Config) AgentNames() []string {
-	var names []string
-	for n := range c.Agents {
-		if n != "claude" && n != ShellAgent {
+	var names, own []string
+	for _, n := range builtinAgents {
+		if _, ok := c.Agents[n]; ok {
 			names = append(names, n)
 		}
 	}
-	sort.Strings(names)
-	if _, ok := c.Agents["claude"]; ok {
-		names = append([]string{"claude"}, names...)
+	for n := range c.Agents {
+		if !slices.Contains(builtinAgents, n) && n != ShellAgent {
+			own = append(own, n)
+		}
 	}
-	return append(names, ShellAgent)
+	sort.Strings(own)
+	return append(append(names, own...), ShellAgent)
 }
 
 // ExpandHome replaces a leading ~ with the home directory.

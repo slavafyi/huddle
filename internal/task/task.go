@@ -102,6 +102,9 @@ type Rules struct {
 	// this source when set.
 	BranchTemplate string
 	PromptTemplate string
+	// ScratchPromptTemplate replaces PromptTemplate in a scratch folder,
+	// where the agent has no repo to look the task up in.
+	ScratchPromptTemplate string
 }
 
 // Signals are what huddle knows about tasks besides their source data,

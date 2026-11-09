@@ -35,7 +35,9 @@ func (s *Issues) Rules() task.Rules {
 		ListName:       "Issues",
 		RepoInList:     true,
 		BranchTemplate: "feature/{number}-{slug}",
-		PromptTemplate: "Take issue {full_id}",
+		PromptTemplate: "Take an issue #{number}",
+		// No repo in a scratch folder, so name it.
+		ScratchPromptTemplate: "Take an issue {full_id}",
 	}
 }
 

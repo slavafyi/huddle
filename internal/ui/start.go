@@ -53,6 +53,8 @@ type startPanel struct {
 	agents     []string
 	agentIdx   int
 	prompt     string
+	autoPrompt string // the prompt huddle filled in; replaced on workspace change while unedited
+	promptFor  func(workspace.Kind) string
 	showMove   bool
 	moveStatus bool
 	showAssign bool
@@ -144,7 +146,6 @@ func (a *App) openStart(t task.Task) {
 		task:   t,
 		branch: workspace.Expand(cmp.Or(r.BranchTemplate, cfg.BranchTemplate), v),
 		agents: cfg.AgentNames(),
-		prompt: workspace.Expand(cmp.Or(r.PromptTemplate, cfg.PromptTemplate), v),
 	}
 	if r.RepoInList {
 		p.fixedRepo = true
@@ -159,6 +160,9 @@ func (a *App) openStart(t task.Task) {
 	if task.WantsScratch(t, cfg.ScratchTypes, cfg.ScratchPrefixes) {
 		p.kind = workspace.Scratch
 	}
+	p.promptFor = func(k workspace.Kind) string { return a.defaultPrompt(t, k) }
+	p.prompt = p.promptFor(p.kind)
+	p.autoPrompt = p.prompt
 	if slices.Contains(a.rules[t.Source].Startable, t.Status) {
 		p.showMove, p.moveStatus = true, true
 	}
@@ -168,6 +172,16 @@ func (a *App) openStart(t task.Task) {
 	p.session = a.state.ClientSessions[t.Project]
 	a.start = p
 	a.mode = modeStart
+}
+
+// defaultPrompt is the prompt for t in a workspace of kind k.
+func (a *App) defaultPrompt(t task.Task, k workspace.Kind) string {
+	r := a.rules[t.Source]
+	tmpl := cmp.Or(r.PromptTemplate, a.deps.Config.PromptTemplate)
+	if k == workspace.Scratch && r.ScratchPromptTemplate != "" {
+		tmpl = r.ScratchPromptTemplate
+	}
+	return workspace.Expand(tmpl, templateVars(t))
 }
 
 // templateVars are a task's values for the branch and prompt templates.
@@ -296,6 +310,10 @@ func (p *startPanel) change(d int) {
 	switch p.field {
 	case fWorkspace:
 		p.kind = workspace.Kind(cycle(int(p.kind), d, 3))
+		if p.prompt == p.autoPrompt && p.promptFor != nil {
+			p.prompt = p.promptFor(p.kind)
+			p.autoPrompt = p.prompt
+		}
 	case fRepo:
 		p.repoIdx = cycle(p.repoIdx, d, len(p.filtered()))
 	case fAgent:
@@ -334,7 +352,7 @@ func (a *App) plan() (launch.Plan, string) {
 	}
 	prompt := strings.TrimSpace(p.prompt)
 	if prompt == "" {
-		prompt = workspace.Expand(cmp.Or(a.rules[t.Source].PromptTemplate, cfg.PromptTemplate), templateVars(t))
+		prompt = a.defaultPrompt(t, p.kind)
 	}
 	agent := p.agents[p.agentIdx]
 	lp := launch.Plan{

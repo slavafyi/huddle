@@ -167,7 +167,7 @@ func TestStartPanelForIssue(t *testing.T) {
 	if p == nil {
 		t.Fatal("panel not open")
 	}
-	if p.branch != "feature/42-fix-checkout" || p.prompt != "Take issue acme/shop#42" || p.showMove {
+	if p.branch != "feature/42-fix-checkout" || p.prompt != "Take an issue #42" || p.showMove {
 		t.Errorf("branch %q prompt %q move %v", p.branch, p.prompt, p.showMove)
 	}
 	for _, f := range p.fields() {
@@ -182,7 +182,7 @@ func TestStartPanelForIssue(t *testing.T) {
 		}
 	}
 	e.press("right", "ctrl+s") // checkout
-	want := "new-session shop | /r/shop | shop#42 Fix checkout | claude Take issue acme/shop#42"
+	want := "new-session shop | /r/shop | shop#42 Fix checkout | claude Take an issue #42"
 	if len(e.rex.calls) == 0 || e.rex.calls[0] != want {
 		t.Fatalf("rex calls:\n%s\nwant:\n%s", strings.Join(e.rex.calls, "\n"), want)
 	}
@@ -202,5 +202,31 @@ func TestStartPanelForIssueWithoutClone(t *testing.T) {
 	e.press("left", "ctrl+s") // scratch still works, in a safe folder
 	if len(e.rex.calls) == 0 || !strings.Contains(e.rex.calls[0], "/other-5-elsewhere |") {
 		t.Fatalf("rex calls: %v", e.rex.calls)
+	}
+}
+
+// In a scratch folder there is no repo, so the prompt names it, unless
+// you edited the prompt.
+func TestIssuePromptFollowsWorkspace(t *testing.T) {
+	e := withIssues(t)
+	selectIn(t, e, "3", task.Ref(github.IssuesSource, "acme/shop#42"))
+	e.press("enter")
+	p := e.app.start
+	for p.kind != workspace.Scratch {
+		e.press("right")
+	}
+	if p.prompt != "Take an issue acme/shop#42" {
+		t.Errorf("scratch prompt = %q", p.prompt)
+	}
+	e.press("right")
+	if p.prompt != "Take an issue #42" {
+		t.Errorf("repo prompt = %q", p.prompt)
+	}
+	p.prompt = "my own words"
+	for p.kind != workspace.Scratch {
+		e.press("right")
+	}
+	if p.prompt != "my own words" {
+		t.Errorf("edited prompt replaced: %q", p.prompt)
 	}
 }
