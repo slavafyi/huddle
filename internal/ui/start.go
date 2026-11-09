@@ -215,7 +215,7 @@ func (a *App) startKey(msg tea.KeyPressMsg) tea.Cmd {
 	case "esc":
 		a.mode, a.start = modeNormal, nil
 		return nil
-	case "ctrl+s":
+	case "enter", "ctrl+s": // all fields are one line, so enter launches
 		return a.launch()
 	case "tab", "down":
 		p.moveField(1)
@@ -528,7 +528,7 @@ func (a *App) renderStart(height int) []string {
 	if p.showAssign {
 		lines = append(lines, label(fAssign, check(p.assign)+" Assign to me"+sFaint.Render(" (now: "+clickup.With(t, a.cache.Me.ID)+")")))
 	}
-	lines = append(lines, "", sMagenta.Reverse(true).Bold(true).Render(" Launch ⌃S "))
+	lines = append(lines, "", sMagenta.Reverse(true).Bold(true).Render(" Launch ⏎ "))
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, inner, "…")
 	}

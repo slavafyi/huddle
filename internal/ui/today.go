@@ -34,8 +34,7 @@ func (v *todayView) rebuild(tasks []clickup.Task, me int64, now time.Time, agent
 			var when, state string
 			switch g.Name {
 			case "Waiting on others":
-				when = statusStyle(t.Status).Render(t.Status)
-				state = sYellow.Render("with " + clickup.With(t, me))
+				when = statusStyle(t.Status).Render(t.Status) // who has it: see the detail area
 			case "Done this week":
 				when = sFaint.Render(t.Done.In(now.Location()).Format("Jan 2"))
 				state = sGreen.Render("✓ " + t.Status)
@@ -47,7 +46,7 @@ func (v *todayView) rebuild(tasks []clickup.Task, me int64, now time.Time, agent
 				}
 			}
 			s.rows = append(s.rows, row{key: t.ID, cells: []string{
-				sFaint.Render(t.Key()), t.Name, t.ListName, when, state,
+				sFaint.Render(t.Key()), prioMark(t.Priority) + t.Name, t.ListName, when, state,
 			}})
 		}
 		secs = append(secs, s)

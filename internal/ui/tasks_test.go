@@ -18,7 +18,7 @@ func TestTasksViewShowsGroupsAfterLoad(t *testing.T) {
 	e.load(t)
 	e.press("2")
 	out := plain(e)
-	for _, want := range []string{"Mine + Lead", "to start 2", "in progress 1", "pending 1", "DEV-7700", "Promo: Checkout personalisation", "Snowcap", "Malcolm", "synced"} {
+	for _, want := range []string{"Mine + Lead", "to start 2", "in progress 1", "pending 1", "DEV-7700", "Promo: Checkout personalisation", "Snowcap", "synced"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}

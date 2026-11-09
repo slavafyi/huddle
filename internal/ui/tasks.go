@@ -16,7 +16,7 @@ type taskView struct {
 
 func newTaskView() *taskView {
 	return &taskView{list: list{
-		cols:  []column{{"ID", 10}, {"TITLE", 0}, {"CLIENT", 18}, {"DUE", 7}, {"WITH", 12}},
+		cols:  []column{{"ID", 10}, {"TITLE", 0}, {"CLIENT", 18}, {"DUE", 7}},
 		empty: "no tasks",
 	}}
 }
@@ -38,7 +38,7 @@ func (v *taskView) rebuild(tasks []clickup.Task, me int64, now time.Time, agents
 		s := section{title: g.Name, style: statusStyle(g.Name).Render}
 		for _, t := range g.Tasks {
 			s.rows = append(s.rows, row{key: t.ID, cells: []string{
-				sFaint.Render(t.Key()), t.Name + agents.badge(t.ID), t.ListName, fmtDue(t.Due, now), fmtWith(t, me),
+				sFaint.Render(t.Key()), prioMark(t.Priority) + t.Name + agents.badge(t.ID), t.ListName, fmtDue(t.Due, now),
 			}})
 		}
 		secs = append(secs, s)
@@ -58,15 +58,6 @@ func (v *taskView) subHeader(tasks []clickup.Task, me int64) string {
 		}
 	}
 	return strings.Join(parts, "   ")
-}
-
-func fmtWith(t clickup.Task, me int64) string {
-	w := clickup.With(t, me)
-	switch w {
-	case "you", "nobody":
-		return sFaint.Render(w)
-	}
-	return sYellow.Render(w)
 }
 
 // taskDetail is the detail area for a task.

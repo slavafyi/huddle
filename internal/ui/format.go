@@ -36,6 +36,17 @@ func ago(d time.Duration) string {
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
 }
 
+// prioMark marks only high (!) and urgent (!!) tasks, before the title.
+func prioMark(p string) string {
+	switch p {
+	case "urgent":
+		return sRed.Bold(true).Render("!!") + " "
+	case "high":
+		return sYellow.Bold(true).Render("!") + " "
+	}
+	return ""
+}
+
 // plural returns "1 agent" or "2 agents".
 func plural(n int, word string) string {
 	if n == 1 {

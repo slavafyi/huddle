@@ -9,7 +9,7 @@ func TestTodayShowsGroupsInOrder(t *testing.T) {
 	e := newEnv(t)
 	e.load(t)
 	out := plain(e) // Today is the first tab
-	order := []string{"In progress 1", "DEV-7808", "Up next 2", "DEV-7700", "DEV-7053", "Waiting on others 1", "DEV-7324", "Malcolm", "Done this week 1", "DEV-7142"}
+	order := []string{"In progress 1", "DEV-7808", "Up next 2", "DEV-7700", "DEV-7053", "Waiting on others 1", "DEV-7324", "Done this week 1", "DEV-7142"}
 	pos := -1
 	for _, want := range order {
 		i := strings.Index(out, want)

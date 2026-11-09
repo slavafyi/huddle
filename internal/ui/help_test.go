@@ -34,7 +34,7 @@ func TestPanelHasNoKeyHints(t *testing.T) {
 			t.Errorf("panel shows %q:\n%s", hint, out)
 		}
 	}
-	for _, label := range []string{"Workspace", "Repo", "Branch", "Agent", "Prompt", "Launch ⌃S"} {
+	for _, label := range []string{"Workspace", "Repo", "Branch", "Agent", "Prompt", "Launch ⏎"} {
 		if !strings.Contains(out, label) {
 			t.Errorf("panel missing %q", label)
 		}
