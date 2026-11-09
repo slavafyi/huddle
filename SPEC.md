@@ -90,8 +90,8 @@ On launch, in this order (stop at the first error, no rollback):
    (reuse the branch or folder if it exists); checkout as is; or `mkdir`
    `<scratch_root>/{id_lower}-{slug}`.
 2. Rex: new tab `{id} <title>` in the client's session (one session per
-   client, named after the ClickUp list, found by stored ID). Create the
-   session if missing. The tab runs the agent with the prompt.
+   client, named after the ClickUp list, found by stored ID, else by
+   name). Create the session if missing. The tab runs the agent with the prompt.
 3. Save the agent record; update ClickUp; remember the repo for this client.
 
 ### 4.5 Agents

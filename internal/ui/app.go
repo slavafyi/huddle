@@ -246,6 +246,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.onWrite(msg)
 	case launchedMsg:
 		return a, a.onLaunched(msg)
+	case enterMsg:
+		return a, a.onEnter(msg)
 	case reposMsg:
 		a.cache.Repos, a.cache.ReposAt = msg.repos, msg.at
 		return a, a.saveCache()
@@ -332,7 +334,9 @@ func (a *App) taskAction(k string) tea.Cmd {
 		a.mode, a.input, a.commentTask = modeComment, "", t.ID
 	case "a":
 		return a.toggleAssign(t)
-	case "enter", "shift+enter":
+	case "enter":
+		return a.enterTask(t)
+	case "shift+enter":
 		a.openStart(t)
 		return a.scanRepos(false)
 	}

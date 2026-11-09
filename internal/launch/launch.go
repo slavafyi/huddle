@@ -56,6 +56,21 @@ func Argv(agents map[string][]string, name, prompt string) []string {
 	return out
 }
 
+// clientSession picks the session for a client: the stored one if it still
+// exists, else one named after the client, else "".
+func clientSession(sessions map[string]string, stored, client string) string {
+	if _, ok := sessions[stored]; ok && stored != "" {
+		return stored
+	}
+	var found string
+	for id, label := range sessions {
+		if label == client && (found == "" || id < found) {
+			found = id
+		}
+	}
+	return found
+}
+
 // Run starts the agent. Steps run in order and stop at the first error,
 // with no rollback. Once the tab is open the agent is returned even if a
 // later step fails; those failures become warnings.
@@ -65,17 +80,14 @@ func Run(ctx context.Context, d Deps, p Plan) (Result, error) {
 		return Result{}, err
 	}
 
-	exists := false
-	if p.SessionID != "" {
-		sessions, err := d.Rex.Sessions(ctx)
-		if err != nil {
-			return Result{}, fmt.Errorf("list Rex sessions: %w", err)
-		}
-		_, exists = sessions[p.SessionID]
+	sessions, err := d.Rex.Sessions(ctx)
+	if err != nil {
+		return Result{}, fmt.Errorf("list Rex sessions: %w", err)
 	}
+	session := clientSession(sessions, p.SessionID, p.Task.ListName)
 	var pl rex.Placement
-	if exists {
-		pl, err = d.Rex.NewWindow(ctx, p.SessionID, p.TabName, dir, p.Argv)
+	if session != "" {
+		pl, err = d.Rex.NewWindow(ctx, session, p.TabName, dir, p.Argv)
 	} else {
 		pl, err = d.Rex.NewSession(ctx, p.Task.ListName, dir, p.TabName, p.Argv)
 	}

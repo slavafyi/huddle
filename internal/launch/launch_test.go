@@ -109,6 +109,7 @@ func TestScratchInExistingSession(t *testing.T) {
 
 func TestWorktreeInNewSessionWhenStoredSessionIsGone(t *testing.T) {
 	r, cu, f, d := setup()
+	r.sessions = map[string]string{"session:other": "Lark Kids"}
 	f.Responses = []run.Response{
 		{Match: "git -C /r/snowcap rev-parse", Err: errors.New("no branch")},
 		{Match: "git -C /r/snowcap symbolic-ref", Out: "origin/main"},
@@ -183,5 +184,17 @@ func TestArgv(t *testing.T) {
 	}
 	if Argv(agents, "shell", "x") != nil {
 		t.Error("shell has no command")
+	}
+}
+
+func TestFindsClientSessionByNameWhenNoneStored(t *testing.T) {
+	r, _, _, d := setup()
+	p := Plan{Task: task(), Workspace: workspace.Plan{Kind: workspace.Scratch, ScratchRoot: t.TempDir(), TaskKey: "k", Slug: "s"}, TabName: "T"}
+	res, err := Run(context.Background(), d, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(r.calls[1], "new-window session:S | T") || res.Agent.SessionID != "session:S" {
+		t.Errorf("should reuse the session named after the client: %v", r.calls)
 	}
 }

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/slavafyi/cuddle/internal/clickup"
 	"github.com/slavafyi/cuddle/internal/launch"
+	"github.com/slavafyi/cuddle/internal/rex"
+	"github.com/slavafyi/cuddle/internal/store"
 	"github.com/slavafyi/cuddle/internal/workspace"
 )
 
@@ -50,10 +53,65 @@ type startPanel struct {
 	session    string // stored session for the client, if it still exists
 }
 
-type launchedMsg struct {
-	res  launch.Result
-	plan launch.Plan
-	err  error
+type (
+	launchedMsg struct {
+		res  launch.Result
+		plan launch.Plan
+		err  error
+	}
+	// enterMsg is the answer to "does this task have a live tab?".
+	enterMsg struct {
+		taskID string
+		agent  *store.Agent // nil: no live tab, open the panel
+		err    error        // focus error, if any
+	}
+)
+
+// enterTask focuses the newest live agent tab of a task, or opens the
+// Start panel when there is none.
+func (a *App) enterTask(t clickup.Task) tea.Cmd {
+	var agents []store.Agent
+	for _, ag := range a.state.Agents {
+		if ag.TaskID == t.ID {
+			agents = append(agents, ag)
+		}
+	}
+	if len(agents) == 0 || a.deps.Rex == nil {
+		a.openStart(t)
+		return a.scanRepos(false)
+	}
+	rx := a.deps.Rex
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		for i := len(agents) - 1; i >= 0; i-- {
+			ag := agents[i]
+			blocks, err := rx.Blocks(ctx, ag.SessionID)
+			if err != nil || !blocks[ag.BlockID] {
+				continue
+			}
+			return enterMsg{taskID: t.ID, agent: &ag, err: rx.Focus(ctx, ag.SessionID, ag.WindowID)}
+		}
+		return enterMsg{taskID: t.ID}
+	}
+}
+
+func (a *App) onEnter(m enterMsg) tea.Cmd {
+	if m.agent == nil {
+		if t, ok := a.taskByID(m.taskID); ok {
+			a.openStart(t)
+		}
+		return a.scanRepos(false)
+	}
+	switch {
+	case m.err == nil:
+		a.flash = sGreen.Render("→ " + m.agent.TaskKey + " in " + m.agent.Client)
+	case errors.Is(m.err, rex.ErrRemoteControl):
+		a.flash = sYellow.Render("tab is active in session " + m.agent.Client + " · " + m.err.Error())
+	default:
+		a.flash = sRed.Render(m.err.Error())
+	}
+	return nil
 }
 
 func (a *App) openStart(t clickup.Task) {
@@ -364,7 +422,7 @@ func (a *App) renderStart(height int) []string {
 		}
 		lines = append(lines, sFaint.Render("  Folder"), "  "+sFaint.Render(parent), "  "+filepath.Base(dir))
 	}
-	where := "new session " + sBold.Render(t.ListName)
+	where := "new tab in session " + sBold.Render(t.ListName) + sFaint.Render(" (created if missing)")
 	if p.session != "" {
 		where = "new tab in session " + sBold.Render(t.ListName)
 	}
