@@ -476,7 +476,7 @@ func (a *App) runCmd(c run.Cmd) tea.Cmd {
 func (a *App) View() tea.View {
 	v := tea.NewView(a.Render())
 	v.AltScreen = true
-	v.WindowTitle = "Cuddle"
+	v.WindowTitle = "CUddle"
 	return v
 }
 

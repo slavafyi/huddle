@@ -88,7 +88,7 @@ func TestViewUsesAltScreenAndTitle(t *testing.T) {
 	if !v.AltScreen {
 		t.Error("want alt screen")
 	}
-	if v.WindowTitle != "Cuddle" {
+	if v.WindowTitle != "CUddle" {
 		t.Errorf("title = %q", v.WindowTitle)
 	}
 }
