@@ -126,60 +126,6 @@ func TestNoSourcesMessage(t *testing.T) {
 	}
 }
 
-func TestProfilePickerFitsAt80Columns(t *testing.T) {
-	e := withProfiles(t)
-	e.app.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
-	e.press("P")
-	var line string
-	for _, l := range strings.Split(plain(e), "\n") {
-		if strings.Contains(l, "● 1 work") {
-			line = l
-		}
-	}
-	if !strings.Contains(line, "ClickUp · vertexdigital") || strings.Contains(line, "…") {
-		t.Errorf("current profile line cut or unmarked: %q\n%s", line, plain(e))
-	}
-	if strings.Contains(plain(e), "● 2 personal") {
-		t.Error("only the current profile is marked")
-	}
-}
-
-// The picker has fixed columns (mark, number, name, summary on the right)
-// and a reversed cursor row that starts on the next profile.
-func TestProfilePickerLayout(t *testing.T) {
-	e := withProfiles(t)
-	e.press("P")
-	if e.app.profilePicker.cursor != 1 {
-		t.Errorf("cursor = %d, want the next profile", e.app.profilePicker.cursor)
-	}
-	lines := e.app.renderProfilePicker()
-	var rows []string
-	for _, l := range lines {
-		if strings.Contains(l, "work") || strings.Contains(l, "personal") || strings.Contains(l, "oss") {
-			rows = append(rows, l)
-		}
-	}
-	if len(rows) != 3 {
-		t.Fatalf("rows: %q", rows)
-	}
-	if !strings.Contains(rows[1], "100m") || strings.Contains(rows[0], "100m") {
-		t.Errorf("cursor row not reversed: %q", rows)
-	}
-	// col is the display column where s starts in row r.
-	col := func(r, s string) int { return ansi.StringWidth(r[:strings.Index(r, s)]) }
-	p := make([]string, len(rows))
-	for i, r := range rows {
-		p[i] = ansi.Strip(r)
-	}
-	if col(p[0], "1 work") != col(p[1], "2 personal") || col(p[1], "2 personal") != col(p[2], "3 oss") {
-		t.Errorf("number and name columns not aligned: %q", p)
-	}
-	end := func(r, s string) int { return col(r, s) + ansi.StringWidth(s) }
-	if end(p[0], "vertexdigital") != end(p[1], "slavafyi") {
-		t.Errorf("summaries not right-aligned: %q", p)
-	}
-}
-
 func TestBacktickSwitchesToPreviousProfile(t *testing.T) {
 	e := withProfiles(t)
 	_, cmd := e.app.Update(key("`"))
@@ -201,5 +147,47 @@ func TestBacktickWithoutOtherProfile(t *testing.T) {
 	e.press("?")
 	if !strings.Contains(plain(e), "`            last profile") {
 		t.Errorf("help:\n%s", plain(e))
+	}
+}
+
+// The profile picker looks like the status picker: number, name, faint
+// summary, "(current)"; what you type shows after the title; the grey
+// cursor starts on the next profile.
+func TestProfilePickerLayout(t *testing.T) {
+	e := withProfiles(t)
+	e.press("P")
+	if e.app.profilePicker.cursor != 1 {
+		t.Errorf("cursor = %d, want the next profile", e.app.profilePicker.cursor)
+	}
+	lines := e.app.renderProfilePicker()
+	plainLines := make([]string, len(lines))
+	for i, l := range lines {
+		plainLines[i] = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(ansi.Strip(l)), "│ "), " │")
+	}
+	want := []string{"Profile", "1 work", "2 personal", "3 oss"}
+	for i, w := range want {
+		if got := strings.TrimSpace(plainLines[i+1]); !strings.HasPrefix(got, w) {
+			t.Errorf("line %d = %q, want prefix %q", i+1, got, w)
+		}
+	}
+	if !strings.Contains(plainLines[2], "ClickUp · vertexdigital (current)") || strings.Contains(strings.Join(plainLines, "\n"), "●") {
+		t.Errorf("current profile row: %q", plainLines[2])
+	}
+	if !strings.Contains(lines[3], selBG) || strings.Contains(lines[2], selBG) {
+		t.Errorf("grey cursor not on the next profile")
+	}
+	e.press("o", "s")
+	if got := ansi.Strip(e.app.renderProfilePicker()[1]); !strings.Contains(got, "Profile · os▏") {
+		t.Errorf("filter not after the title: %q", got)
+	}
+}
+
+func TestProfilePickerFitsAt80Columns(t *testing.T) {
+	e := withProfiles(t)
+	e.app.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	e.press("P")
+	line := lineWith(plain(e), "1 work")
+	if !strings.Contains(line, "ClickUp · vertexdigital (current)") || strings.Contains(line, "…") {
+		t.Errorf("current profile line cut: %q\n%s", line, plain(e))
 	}
 }

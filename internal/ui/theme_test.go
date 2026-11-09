@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -72,5 +74,21 @@ func TestBoxesHaveRoundCorners(t *testing.T) {
 		if !strings.HasPrefix(top, "╭") || !strings.HasSuffix(top, "╮") || !strings.HasPrefix(bottom, "╰") || !strings.HasSuffix(bottom, "╯") {
 			t.Errorf("corners: %q %q", top, bottom)
 		}
+	}
+}
+
+func TestStatusPickerCtrlNP(t *testing.T) {
+	e := newEnv(t)
+	e.cu.statuses = listStatuses
+	e.load(t)
+	e.press("2", "s")
+	c := e.app.picker.cursor
+	e.app.Update(tea.KeyPressMsg{Code: 'n', Mod: tea.ModCtrl})
+	if e.app.picker.cursor != (c+1)%len(e.app.picker.statuses) {
+		t.Errorf("ctrl+n: %d → %d", c, e.app.picker.cursor)
+	}
+	e.app.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
+	if e.app.picker.cursor != c {
+		t.Errorf("ctrl+p: back to %d, got %d", c, e.app.picker.cursor)
 	}
 }

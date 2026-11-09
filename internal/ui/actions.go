@@ -82,9 +82,9 @@ func (a *App) pickerKey(k string) tea.Cmd {
 	switch k {
 	case "esc", "q":
 		a.mode = modeNormal
-	case "j", "down":
+	case "j", "down", "ctrl+n":
 		p.cursor = (p.cursor + 1) % len(p.statuses)
-	case "k", "up":
+	case "k", "up", "ctrl+p":
 		p.cursor = (p.cursor - 1 + len(p.statuses)) % len(p.statuses)
 	case "enter":
 		return a.applyStatus(p.statuses[p.cursor])

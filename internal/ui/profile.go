@@ -117,29 +117,29 @@ func (a *App) switchProfile(name string) tea.Cmd {
 // "" when the user quit.
 func (a *App) SwitchTo() string { return a.switchTo }
 
+// renderProfilePicker draws the P popup in the status picker's style:
+// what you type after the title, rows "1 work   summary (current)", the
+// grey cursor row.
 func (a *App) renderProfilePicker() []string {
 	p := &a.profilePicker
-	lines := []string{sBold.Render("Profile"), sFaint.Render("› ") + p.filter + "▏", ""}
+	const width = 52
+	inner := width - 4
+	lines := []string{sBold.Render("Profile") + sFaint.Render(" · ") + p.filter + "▏"}
 	shown := p.shown()
 	if len(shown) == 0 {
 		lines = append(lines, sFaint.Render("no match"))
 	}
-	// Fixed columns: current mark, number, name, summary on the right. The
-	// cursor row is reversed like list rows.
-	const width = 52
-	inner := width - 4
+	nameW := 10
+	for _, pr := range shown {
+		nameW = max(nameW, ansi.StringWidth(pr.Name))
+	}
 	for i, pr := range shown {
-		mark := "  "
+		left := fmt.Sprintf("%d %-*s ", i+1, nameW, pr.Name)
+		sum := pr.Summary()
 		if pr.Name == a.deps.Profile {
-			mark = "● "
+			sum += " (current)"
 		}
-		left := fmt.Sprintf("%d %-12s", i+1, pr.Name)
-		sum := ansi.Truncate(pr.Summary(), inner-len(mark)-ansi.StringWidth(left)-1, "…")
-		gap := strings.Repeat(" ", max(1, inner-len([]rune(mark))-ansi.StringWidth(left)-ansi.StringWidth(sum)))
-		if mark != "  " {
-			mark = sGreen.Render("●") + " "
-		}
-		line := mark + left + gap + sFaint.Render(sum)
+		line := left + sFaint.Render(ansi.Truncate(sum, inner-ansi.StringWidth(left), "…"))
 		if i == p.cursor {
 			line = selected(line, inner)
 		}
