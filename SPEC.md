@@ -192,7 +192,12 @@ Only the 16 ANSI colors plus bold / faint / reverse, so the terminal theme
 go by status name; unknown names are green when done, else faint.
 Meaning never depends on blue, yellow, magenta or cyan alone (they are
 grey in some themes, e.g. koda-dark): the active tab and filter are bold
-(inactive faint), the cursor row is reverse.
+(inactive faint). The cursor row has an ANSI 8 (bright black) background
+across the full width; it keeps its colors (red date, status), faint text
+turns normal.
+
+**List layout:** group titles start at column 2; rows are indented under
+them, cells from column 4; the selected row has `›` in column 0.
 
 ## 5. Config and files
 
@@ -465,7 +470,7 @@ them into Today (the "Open" group) is noise.
   Inactive: faint.
 - Profile picker: fixed columns `● 1 work  …  ClickUp · vertexdigital` —
   current mark (green ●) / number / name / summary right-aligned. The
-  cursor row is **reverse** like list rows and starts on the next profile.
+  cursor row has the list's grey selection and starts on the next profile.
 - Rule for §4.8: meaning never depends on blue, yellow, magenta or cyan
   alone (they are grey in koda-dark); use bold / faint / reverse, red and
   green.
