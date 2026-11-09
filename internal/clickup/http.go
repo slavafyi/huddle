@@ -24,8 +24,8 @@ type HTTP struct {
 	LeadFieldID string
 	Client      *http.Client
 
-	typesOnce sync.Once
-	types     map[int]string
+	typesMu sync.Mutex
+	types   map[int]string // nil until loaded
 }
 
 func (c *HTTP) do(ctx context.Context, method, path string, query url.Values, body, out any) error {
@@ -170,23 +170,33 @@ func (c *HTTP) SetAssignee(ctx context.Context, taskID string, user int64, add b
 	return c.do(ctx, "PUT", "/task/"+taskID, nil, map[string]any{"assignees": change}, nil)
 }
 
-// loadTypes fetches task type names once. Failure only leaves names empty.
+// loadTypes fetches task type names until it succeeds once. A failure only
+// leaves names empty for this fetch.
 func (c *HTTP) loadTypes(ctx context.Context) {
-	c.typesOnce.Do(func() {
-		var r struct {
-			Items []struct {
-				ID   int    `json:"id"`
-				Name string `json:"name"`
-			} `json:"custom_items"`
-		}
-		c.types = map[int]string{}
-		if err := c.do(ctx, "GET", "/team/"+c.TeamID+"/custom_item", nil, nil, &r); err != nil {
-			return
-		}
-		for _, it := range r.Items {
-			c.types[it.ID] = it.Name
-		}
-	})
+	c.typesMu.Lock()
+	defer c.typesMu.Unlock()
+	if c.types != nil {
+		return
+	}
+	var r struct {
+		Items []struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		} `json:"custom_items"`
+	}
+	if err := c.do(ctx, "GET", "/team/"+c.TeamID+"/custom_item", nil, nil, &r); err != nil {
+		return
+	}
+	c.types = map[int]string{}
+	for _, it := range r.Items {
+		c.types[it.ID] = it.Name
+	}
+}
+
+func (c *HTTP) typeName(id int) string {
+	c.typesMu.Lock()
+	defer c.typesMu.Unlock()
+	return c.types[id]
 }
 
 type apiTask struct {
@@ -220,7 +230,7 @@ func (c *HTTP) convert(a apiTask) Task {
 	t := Task{
 		ID: a.ID, CustomID: a.CustomID, Name: a.Name, URL: a.URL,
 		Status: a.Status.Status, StatusType: a.Status.Type, StatusOrder: a.Status.OrderIndex,
-		ListID: a.List.ID, ListName: a.List.Name, TypeName: c.types[a.CustomItemID],
+		ListID: a.List.ID, ListName: a.List.Name, TypeName: c.typeName(a.CustomItemID),
 		Assignees: a.Assignees,
 		Due:       parseMS(a.Due), Updated: parseMS(a.Updated),
 		Done: parseMS(a.Closed),

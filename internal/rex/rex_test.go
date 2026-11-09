@@ -46,7 +46,8 @@ func TestSessionsAndBlocks(t *testing.T) {
 	f := &run.Fake{Responses: []run.Response{
 		{Match: "rex ls", Out: `{"sessions":[{"session_id":"session:A","label":"Snowcap"},{"session_id":"session:B","label":null}]}`},
 		{Match: "rex block ls -s session:A", Out: `{"blocks":[{"block_id":"block:1","window_id":"window:1"}]}`},
-		{Match: "rex block ls -s session:gone", Err: errors.New("no such session")},
+		{Match: "rex block ls -s session:gone", Err: errors.New(`rex: exit status 3: Error: session target "session:gone" not found`)},
+		{Match: "rex block ls -s session:slow", Err: errors.New("rex: exit status 1: Error: timeout")},
 	}}
 	c := &CLI{Runner: f}
 	ss, err := c.Sessions(context.Background())
@@ -60,6 +61,16 @@ func TestSessionsAndBlocks(t *testing.T) {
 	bs, err = c.Blocks(context.Background(), "session:gone")
 	if err != nil || len(bs) != 0 {
 		t.Errorf("gone session should give no blocks: %v, %v", bs, err)
+	}
+	if _, err = c.Blocks(context.Background(), "session:slow"); err == nil {
+		t.Error("other rex errors must be returned, not read as 'no blocks'")
+	}
+}
+
+func TestNewWindowNeedsWindowID(t *testing.T) {
+	f := &run.Fake{Responses: []run.Response{{Match: "rex window new", Out: `{"block_ids":["block:B"]}`}}}
+	if _, err := (&CLI{Runner: f}).NewWindow(context.Background(), "session:S", "n", "/d", nil); err == nil {
+		t.Error("want error when the reply has no window id")
 	}
 }
 

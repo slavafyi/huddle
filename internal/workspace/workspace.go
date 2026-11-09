@@ -28,6 +28,21 @@ func (k Kind) String() string {
 	return [...]string{"Repo worktree", "Repo checkout", "Scratch"}[k]
 }
 
+// ID is the stable name stored in state files. Never change these.
+func (k Kind) ID() string {
+	return [...]string{"worktree", "checkout", "scratch"}[k]
+}
+
+// ParseKind reads an ID written by Kind.ID.
+func ParseKind(id string) (Kind, bool) {
+	for _, k := range []Kind{Worktree, Checkout, Scratch} {
+		if k.ID() == id {
+			return k, true
+		}
+	}
+	return 0, false
+}
+
 // Repo is a local git repo.
 type Repo struct {
 	Name string `json:"name"`
@@ -245,7 +260,17 @@ func Prepare(ctx context.Context, r run.Runner, p Plan) (string, error) {
 		}
 		return dir, nil
 	}
-	if _, err := git("worktree", "add", "-b", p.Branch, dir, base); err != nil {
+	// The branch was pushed before (another machine, or the local branch
+	// was deleted): continue from the pushed work.
+	if _, err := git("rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+p.Branch); err == nil {
+		if _, err := git("worktree", "add", "--track", "-b", p.Branch, dir, "origin/"+p.Branch); err != nil {
+			return "", fmt.Errorf("add worktree: %w", err)
+		}
+		return dir, nil
+	}
+	// --no-track: the new branch must not have the base branch as upstream,
+	// or a plain `git push` could go to main.
+	if _, err := git("worktree", "add", "--no-track", "-b", p.Branch, dir, base); err != nil {
 		return "", fmt.Errorf("add worktree: %w", err)
 	}
 	return dir, nil

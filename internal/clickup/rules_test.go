@@ -170,4 +170,12 @@ func TestScratchDefault(t *testing.T) {
 	if WantsScratch(Task{Name: "Promo: checkout", TypeName: "Coding"}, types, prefixes) {
 		t.Error("coding task")
 	}
+	for _, name := range []string{"Checkout: add upsell", "Evaluated options already", "Researching nothing"} {
+		if WantsScratch(Task{Name: name}, types, []string{"check", "evaluate", "research"}) {
+			t.Errorf("%q: prefix must match the whole first word", name)
+		}
+	}
+	if !WantsScratch(Task{Name: "Check: promo code report"}, types, []string{"check"}) {
+		t.Error("first word followed by punctuation")
+	}
 }

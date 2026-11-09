@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // DoneWindow is how long done tasks stay in "Done this week".
@@ -158,9 +159,14 @@ func WantsScratch(t Task, types, prefixes []string) bool {
 			return true
 		}
 	}
-	name := strings.ToLower(strings.TrimSpace(t.Name))
+	words := strings.FieldsFunc(strings.ToLower(t.Name), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	if len(words) == 0 {
+		return false
+	}
 	for _, p := range prefixes {
-		if strings.HasPrefix(name, strings.ToLower(p)) {
+		if words[0] == strings.ToLower(p) {
 			return true
 		}
 	}

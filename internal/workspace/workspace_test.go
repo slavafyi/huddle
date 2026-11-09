@@ -117,7 +117,8 @@ func TestPrepareWorktreeNewBranch(t *testing.T) {
 		"git -C /r/snowcap fetch origin",
 		"git -C /r/snowcap symbolic-ref --short refs/remotes/origin/HEAD",
 		"git -C /r/snowcap rev-parse --verify --quiet refs/heads/feature/dev-1-x",
-		"git -C /r/snowcap worktree add -b feature/dev-1-x " + wantDir + " origin/main",
+		"git -C /r/snowcap rev-parse --verify --quiet refs/remotes/origin/feature/dev-1-x",
+		"git -C /r/snowcap worktree add --no-track -b feature/dev-1-x " + wantDir + " origin/main",
 	}
 	if got := f.Calls(); !reflect.DeepEqual(got, want) {
 		t.Errorf("calls:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -139,6 +140,35 @@ func TestPrepareWorktreeExistingBranchAndBaseOverride(t *testing.T) {
 		if strings.Contains(c, "symbolic-ref") {
 			t.Error("base override should skip origin/HEAD lookup")
 		}
+	}
+}
+
+func TestPrepareWorktreeFromRemoteBranch(t *testing.T) {
+	root := t.TempDir()
+	f := &run.Fake{Responses: []run.Response{
+		{Match: "git -C /r/s rev-parse --verify --quiet refs/heads/", Err: errors.New("exit status 1")},
+		{Match: "git -C /r/s rev-parse --verify --quiet refs/remotes/origin/feature/dev-1-x", Out: "abc\n"},
+		{Match: "git -C /r/s symbolic-ref", Out: "origin/main\n"},
+	}}
+	p := Plan{Kind: Worktree, Repo: Repo{Name: "s", Path: "/r/s"}, Branch: "feature/dev-1-x", TaskKey: "dev-1", WorktreeRoot: root}
+	if _, err := Prepare(context.Background(), f, p); err != nil {
+		t.Fatal(err)
+	}
+	calls := f.Calls()
+	want := "git -C /r/s worktree add --track -b feature/dev-1-x " + filepath.Join(root, "s", "dev-1") + " origin/feature/dev-1-x"
+	if last := calls[len(calls)-1]; last != want {
+		t.Errorf("remote branch: %s", last)
+	}
+}
+
+func TestKindIDIsStable(t *testing.T) {
+	for _, k := range []Kind{Worktree, Checkout, Scratch} {
+		if got, ok := ParseKind(k.ID()); !ok || got != k {
+			t.Errorf("round trip %v", k)
+		}
+	}
+	if Worktree.ID() != "worktree" || Scratch.ID() != "scratch" {
+		t.Error("IDs are stored in state.json and must not change")
 	}
 }
 

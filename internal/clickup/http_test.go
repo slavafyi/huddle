@@ -145,6 +145,33 @@ func TestMyTasksFullMergesQueriesAndPages(t *testing.T) {
 	}
 }
 
+func TestTaskTypesRetryAfterFailure(t *testing.T) {
+	fail := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/team/77/custom_item":
+			if fail {
+				w.WriteHeader(503)
+				return
+			}
+			io.WriteString(w, `{"custom_items": [{"id": 1005, "name": "Idea"}]}`)
+		default:
+			io.WriteString(w, `{"tasks": [`+task("t1", "DEV-1", "x")+`], "last_page": true}`)
+		}
+	}))
+	defer srv.Close()
+	c := &HTTP{BaseURL: srv.URL, Token: "pk", TeamID: "77", LeadFieldID: "lead-f"}
+	ts, _ := c.MyTasks(context.Background(), 1, time.Time{}, now)
+	if ts[0].TypeName != "" {
+		t.Fatal("no types expected while the endpoint fails")
+	}
+	fail = false
+	ts, _ = c.MyTasks(context.Background(), 1, time.Time{}, now)
+	if ts[0].TypeName != "Idea" {
+		t.Errorf("types not loaded after the endpoint recovered: %q", ts[0].TypeName)
+	}
+}
+
 func TestMyTasksIncrementalUsesUpdatedSince(t *testing.T) {
 	c, api := newTestClient(t)
 	since := now.Add(-time.Hour)

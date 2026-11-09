@@ -107,7 +107,7 @@ func (c *CLI) NewSession(ctx context.Context, name, dir, window string, argv []s
 	if err := c.rex(ctx, &r, args...); err != nil {
 		return Placement{}, err
 	}
-	if len(r.Windows) == 0 || len(r.Windows[0].Blocks) == 0 {
+	if len(r.Windows) == 0 || len(r.Windows[0].Blocks) == 0 || r.Windows[0].WindowID == "" {
 		return Placement{}, errors.New("rex new: no window in reply")
 	}
 	return Placement{SessionID: r.SessionID, WindowID: r.Windows[0].WindowID, BlockID: r.Windows[0].Blocks[0]}, nil
@@ -123,14 +123,15 @@ func (c *CLI) NewWindow(ctx context.Context, session, name, dir string, argv []s
 	if err := c.rex(ctx, &r, args...); err != nil {
 		return Placement{}, err
 	}
-	if len(r.Blocks) == 0 {
-		return Placement{}, errors.New("rex window new: no block in reply")
+	if len(r.Blocks) == 0 || r.WindowID == "" {
+		return Placement{}, errors.New("rex window new: no window or block in reply")
 	}
 	return Placement{SessionID: session, WindowID: r.WindowID, BlockID: r.Blocks[0]}, nil
 }
 
 // Blocks returns the IDs of blocks in session. A session that no longer
-// exists has no blocks.
+// exists has no blocks; any other failure is returned, so callers don't
+// mistake a slow Rex for closed tabs.
 func (c *CLI) Blocks(ctx context.Context, session string) (map[string]bool, error) {
 	var r struct {
 		Blocks []struct {
@@ -139,7 +140,10 @@ func (c *CLI) Blocks(ctx context.Context, session string) (map[string]bool, erro
 	}
 	out := map[string]bool{}
 	if err := c.rex(ctx, &r, "block", "ls", "-s", session, "--json"); err != nil {
-		return out, nil
+		if strings.Contains(err.Error(), "not found") {
+			return out, nil
+		}
+		return nil, err
 	}
 	for _, b := range r.Blocks {
 		out[b.ID] = true
@@ -276,20 +280,25 @@ func ParseEvent(line []byte) (Event, bool) {
 }
 
 // Watch streams events from `rex events --all --json` until ctx ends. The
-// channel closes when the stream stops.
-func Watch(ctx context.Context) (<-chan Event, error) {
+// channel closes when the stream stops, and the rex process is always
+// stopped and reaped.
+func Watch(parent context.Context) (<-chan Event, error) {
+	ctx, cancel := context.WithCancel(parent)
 	cmd := exec.CommandContext(ctx, "rex", "events", "--all", "--json")
 	out, err := cmd.StdoutPipe()
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	if err := cmd.Start(); err != nil {
+		cancel()
 		return nil, err
 	}
 	ch := make(chan Event, 64)
 	go func() {
 		defer close(ch)
-		defer cmd.Wait()
+		defer cmd.Wait() //nolint:errcheck // runs after cancel, exit status is expected
+		defer cancel()
 		sc := bufio.NewScanner(out)
 		sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 		for sc.Scan() {
