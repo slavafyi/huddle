@@ -257,8 +257,9 @@ them, cells from column 4; the selected row has `›` in column 0.
   else the first in the file. `P` opens a picker (most recently used first,
   from `recent_profiles` next to `last_profile`), styled like the status
   picker: title `Profile`, what you type shows after it (`Profile · per▏`),
-  rows `1 work   ClickUp · vertexdigital (current)` with the summary
-  faint; the grey cursor starts on the next profile. Type to filter,
+  rows `1 ● work … ClickUp · vertexdigital`: number, icon (green ● on the
+  current profile), name, summary faint and right-aligned; the grey
+  cursor starts on the next profile. Type to filter,
   `↑↓` / `ctrl+n` / `ctrl+p` move, `enter` switches, `1–9` jump, `esc`
   closes. The status picker moves with `j` / `k`, `↑↓`, `ctrl+n` /
   `ctrl+p`. Switching ends the program and starts
