@@ -109,10 +109,8 @@ func TestLoadRejectsUnknownSettings(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	for body, want := range map[string]string{
-		"repo_roots = []\n":        "no profiles",
-		"[work]\nclickup = true\n": "set clickup_workspace and clickup_lead in [work]",
-		"[\"a/b\"]\n":              "profile name",
-		"[ok]\n[work]\nclickup = true\nclickup_workspace = \"1\"\n": "set clickup_lead in [work]",
+		"repo_roots = []\n": "no profiles",
+		"[\"a/b\"]\n":       "profile name",
 	} {
 		c, err := Load(write(t, body))
 		if err != nil {
@@ -121,6 +119,16 @@ func TestValidate(t *testing.T) {
 		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q: err = %v, want %q", body, err, want)
 		}
+	}
+}
+
+func TestValidateClickUpIDsAreOptional(t *testing.T) {
+	c, err := Load(write(t, "[work]\nclickup = true\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Validate(); err != nil {
+		t.Errorf("workspace and lead are found automatically: %v", err)
 	}
 }
 

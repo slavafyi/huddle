@@ -36,8 +36,8 @@ type Config struct {
 type Profile struct {
 	Name             string   `toml:"-"`
 	ClickUp          bool     `toml:"clickup"`
-	ClickUpWorkspace string   `toml:"clickup_workspace"`
-	ClickUpLead      string   `toml:"clickup_lead"`
+	ClickUpWorkspace string   `toml:"clickup_workspace"` // optional: found automatically
+	ClickUpLead      string   `toml:"clickup_lead"`      // optional: found automatically
 	GitHubAccount    string   `toml:"github_account"`
 	GitHubOrgs       []string `toml:"github_orgs"`
 	GitHubIssues     *bool    `toml:"github_issues"` // nil means on
@@ -209,20 +209,6 @@ func (c Config) Validate() error {
 	for _, p := range c.Profiles {
 		if !validName(p.Name) {
 			return fmt.Errorf("profile name %q: use letters, digits, - and _ only", p.Name)
-		}
-		if !p.ClickUp {
-			continue
-		}
-		var missing []string
-		if p.ClickUpWorkspace == "" {
-			missing = append(missing, "clickup_workspace")
-		}
-		if p.ClickUpLead == "" {
-			missing = append(missing, "clickup_lead")
-		}
-		if len(missing) > 0 {
-			return fmt.Errorf("set %s in [%s] of %s (finding them automatically is not built yet)",
-				strings.Join(missing, " and "), p.Name, Path())
 		}
 	}
 	return nil

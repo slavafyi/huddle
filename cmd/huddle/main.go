@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -92,13 +93,23 @@ func runProfile(cfg config.Config, p config.Profile, token string, runner run.Ru
 	}
 	var sources []task.Source
 	if p.ClickUp {
-		sources = append(sources, &clickup.Source{
-			Client: &clickup.HTTP{
-				BaseURL: clickup.DefaultBaseURL, Token: token,
-				TeamID: p.ClickUpWorkspace, LeadFieldID: p.ClickUpLead,
-			},
-			InProgress: pcfg.StatusInProgress,
-		})
+		// Detected workspace and lead field, kept next to the cache.
+		path := filepath.Join(store.CacheDir(), p.Name, "clickup.json")
+		h := &clickup.HTTP{BaseURL: clickup.DefaultBaseURL, Token: token}
+		d := &clickup.Detector{
+			HTTP: h, Want: clickup.IDs{Workspace: p.ClickUpWorkspace, Lead: p.ClickUpLead},
+			Save: func(ids clickup.IDs) error { return store.Save(path, ids) },
+		}
+		if store.Load(path, &d.Saved) != nil {
+			d.Saved = clickup.IDs{} // unreadable: detect again
+		}
+		note, err := d.Setup(ctx)
+		if err != nil {
+			return "", err
+		}
+		src := &clickup.Source{Client: h, InProgress: pcfg.StatusInProgress, NoLead: h.LeadFieldID == "", Detector: d}
+		src.SetNote(note, false)
+		sources = append(sources, src)
 	}
 	if p.IssuesOn() {
 		sources = append(sources, &github.Issues{GH: gh})

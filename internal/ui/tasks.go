@@ -51,6 +51,9 @@ func (v *taskView) subHeader(tasks []task.Task) string {
 	var parts []string
 	open := openTasks(tasks)
 	for f := task.FilterAll; f <= task.FilterLeadOnly; f++ {
+		if v.names[f] == "" {
+			continue // the sources have no such filter
+		}
 		label := fmt.Sprintf("%s %d", v.names[f], len(task.Filter(open, f)))
 		if f == v.filter {
 			parts = append(parts, sTabOn.Render(label))

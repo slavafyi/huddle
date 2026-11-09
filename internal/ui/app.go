@@ -135,6 +135,13 @@ type fetched struct {
 	me     int64
 	tasks  []task.Task
 	err    error
+	note   string // for the flash line, from a noter
+	warn   bool
+}
+
+// noter is a source with a one-time message for the flash line.
+type noter interface {
+	TakeNote() (text string, warn bool)
 }
 
 // NewApp returns the root model.
@@ -247,6 +254,9 @@ func (a *App) refreshTasks(full bool) tea.Cmd {
 			if r.err == nil {
 				r.tasks, r.err = s.Fetch(ctx, r.me, since, now)
 			}
+			if n, ok := s.(noter); ok {
+				r.note, r.warn = n.TakeNote()
+			}
 			msg.results = append(msg.results, r)
 		}
 		return msg
@@ -293,6 +303,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.syncErr = nil
 		merged := false
 		for _, r := range msg.results {
+			switch {
+			case r.note != "" && r.warn:
+				a.flash = sYellow.Render(r.note)
+			case r.note != "":
+				a.flash = sFaint.Render(r.note)
+			}
 			if r.err != nil {
 				if a.syncErr == nil {
 					a.syncErr = r.err
@@ -446,7 +462,15 @@ func (a *App) taskKey(k string) tea.Cmd {
 	case "k", "up":
 		l.move(-1)
 	case "t":
-		a.tasks.filter = (a.tasks.filter + 1) % 3
+		for f := a.tasks.filter + 1; ; f++ {
+			if f > task.FilterLeadOnly {
+				f = task.FilterAll
+			}
+			if a.tasks.names[f] != "" || f == a.tasks.filter {
+				a.tasks.filter = f
+				break
+			}
+		}
 		a.rebuild()
 	default:
 		return a.taskAction(k)

@@ -48,3 +48,24 @@ func TestLiveReadOnly(t *testing.T) {
 		t.Error("no tasks")
 	}
 }
+
+// TestLiveDetect finds the workspace and lead field. It only reads.
+// Run with: HUDDLE_LIVE=1 go test -run LiveDetect ./internal/clickup -v
+// HUDDLE_TEAM and HUDDLE_LEAD_FIELD, when set, are the expected IDs.
+func TestLiveDetect(t *testing.T) {
+	if os.Getenv("HUDDLE_LIVE") != "1" {
+		t.Skip("set HUDDLE_LIVE=1 to run against the real ClickUp API (read-only)")
+	}
+	d := &Detector{HTTP: &HTTP{BaseURL: DefaultBaseURL, Token: os.Getenv("CLICKUP_API_TOKEN")}}
+	note, err := d.Setup(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("workspace=%s lead=%s note=%q", d.HTTP.TeamID, d.HTTP.LeadFieldID, note)
+	if w := os.Getenv("HUDDLE_TEAM"); w != "" && d.HTTP.TeamID != w {
+		t.Errorf("workspace %s, want %s", d.HTTP.TeamID, w)
+	}
+	if l := os.Getenv("HUDDLE_LEAD_FIELD"); l != "" && d.HTTP.LeadFieldID != l {
+		t.Errorf("lead field %s, want %s", d.HTTP.LeadFieldID, l)
+	}
+}

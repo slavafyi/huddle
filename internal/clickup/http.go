@@ -65,7 +65,7 @@ func (c *HTTP) do(ctx context.Context, method, path string, query url.Values, bo
 		return err
 	}
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("clickup %s %s: %d %s", method, path, resp.StatusCode, bytes.TrimSpace(data))
+		return &APIError{Method: method, Path: path, Code: resp.StatusCode, Body: string(bytes.TrimSpace(data))}
 	}
 	if out == nil {
 		return nil
@@ -88,15 +88,15 @@ func (c *HTTP) Me(ctx context.Context) (User, error) {
 // MyTasks implements Client.
 func (c *HTTP) MyTasks(ctx context.Context, me int64, since, now time.Time) ([]Task, error) {
 	c.loadTypes(ctx)
-	lead, err := json.Marshal([]map[string]any{{
-		"field_id": c.LeadFieldID, "operator": "ANY", "value": []string{strconv.FormatInt(me, 10)},
-	}})
-	if err != nil {
-		return nil, err
-	}
-	who := []url.Values{
-		{"assignees[]": {strconv.FormatInt(me, 10)}},
-		{"custom_fields": {string(lead)}},
+	who := []url.Values{{"assignees[]": {strconv.FormatInt(me, 10)}}}
+	if c.LeadFieldID != "" {
+		lead, err := json.Marshal([]map[string]any{{
+			"field_id": c.LeadFieldID, "operator": "ANY", "value": []string{strconv.FormatInt(me, 10)},
+		}})
+		if err != nil {
+			return nil, err
+		}
+		who = append(who, url.Values{"custom_fields": {string(lead)}})
 	}
 	var queries []url.Values
 	for _, w := range who {
@@ -252,7 +252,7 @@ func (c *HTTP) convert(a apiTask) Task {
 		}
 	}
 	for _, f := range a.Fields {
-		if f.ID == c.LeadFieldID {
+		if c.LeadFieldID != "" && f.ID == c.LeadFieldID {
 			json.Unmarshal(f.Value, &t.Leads)
 		}
 	}

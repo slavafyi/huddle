@@ -2,7 +2,9 @@ package clickup
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/slavafyi/huddle/internal/task"
@@ -16,6 +18,15 @@ type Source struct {
 	Client Client
 	// InProgress is the status a started task moves to.
 	InProgress string
+	// NoLead turns lead features off: no lead field was found.
+	NoLead bool
+	// Detector, when its IDs are detected, finds them again after a fetch
+	// fails with a client error, and the fetch is tried once more.
+	Detector *Detector
+
+	mu   sync.Mutex
+	note string
+	warn bool
 }
 
 var _ task.Source = (*Source)(nil)
@@ -25,7 +36,7 @@ func (s *Source) Name() string { return SourceName }
 
 // Rules are ClickUp's status words (SPEC §4.2, §4.4).
 func (s *Source) Rules() task.Rules {
-	return task.Rules{
+	r := task.Rules{
 		Active:    []string{"in progress", "feedbacks"},
 		Next:      []string{"to start"},
 		Waiting:   []string{"to review", "pending", "to publish"},
@@ -33,6 +44,12 @@ func (s *Source) Rules() task.Rules {
 		Startable: []string{"to plan", "to start"},
 		MoveTo:    s.InProgress,
 	}
+	if s.NoLead {
+		r.Waiting = nil
+		r.Groups = []string{task.GroupInProgress, task.GroupUpNext, task.GroupDone}
+		r.FilterNames = [3]string{"Assigned", "", ""}
+	}
+	return r
 }
 
 // Me returns my ClickUp user ID.
@@ -44,6 +61,16 @@ func (s *Source) Me(ctx context.Context) (int64, error) {
 // Fetch implements task.Source.
 func (s *Source) Fetch(ctx context.Context, me int64, since, now time.Time) ([]task.Task, error) {
 	ts, err := s.Client.MyTasks(ctx, me, since, now)
+	if err != nil && s.Detector != nil && s.Detector.Auto() && isClientError(err) {
+		warning, changed, derr := s.Detector.Redetect(ctx)
+		if derr != nil {
+			return nil, fmt.Errorf("%w (finding the ClickUp workspace and lead field again: %v)", err, derr)
+		}
+		if changed {
+			s.SetNote(warning, true)
+			ts, err = s.Client.MyTasks(ctx, me, since, now)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +79,23 @@ func (s *Source) Fetch(ctx context.Context, me int64, since, now time.Time) ([]t
 		out[i] = ToTask(t, me)
 	}
 	return out, nil
+}
+
+// SetNote keeps a message for the flash line until TakeNote; warn marks a
+// warning rather than a faint note.
+func (s *Source) SetNote(text string, warn bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.note, s.warn = text, warn
+}
+
+// TakeNote returns the kept message once.
+func (s *Source) TakeNote() (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	text, warn := s.note, s.warn
+	s.note, s.warn = "", false
+	return text, warn
 }
 
 // Statuses returns the statuses of the task's list.

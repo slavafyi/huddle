@@ -5,10 +5,12 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/slavafyi/huddle/internal/clickup"
 	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/task"
 )
 
 func plain(e *testEnv) string { return ansi.Strip(e.app.Render()) }
@@ -137,5 +139,41 @@ func TestOpenTaskInBrowser(t *testing.T) {
 	calls := e.runner.Calls()
 	if len(calls) != 1 || calls[0] != "open https://app.clickup.com/t/t1" {
 		t.Errorf("calls = %v", calls)
+	}
+}
+
+func TestNoLeadFieldHidesLeadFeaturesAndShowsNote(t *testing.T) {
+	e := newEnv(t)
+	src := &clickup.Source{Client: e.cu, NoLead: true}
+	src.SetNote("ClickUp: no lead field; lead features are off", false)
+	d := e.app.deps
+	d.Sources = []task.Source{src}
+	e.app = NewApp(d)
+	e.app.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	e.load(t)
+	out := plain(e)
+	if !strings.Contains(out, "lead features are off") || strings.Contains(out, task.GroupWaiting) {
+		t.Errorf("Today:\n%s", out)
+	}
+	e.press("2")
+	if out := plain(e); strings.Contains(out, "Lead") || !strings.Contains(out, "Assigned") {
+		t.Errorf("Tasks filters:\n%s", out)
+	}
+	e.press("t")
+	if e.app.tasks.filter != task.FilterAll {
+		t.Errorf("filter %v: t should stay on the only filter", e.app.tasks.filter)
+	}
+	e.load(t)
+	if strings.Contains(plain(e), "lead features are off") {
+		t.Error("note shown again after the next refresh")
+	}
+}
+
+func TestSourceWarningGoesToFlash(t *testing.T) {
+	e := newEnv(t)
+	e.app.deps.Sources[0].(*clickup.Source).SetNote("ClickUp settings no longer matched: lead field a → b", true)
+	e.load(t)
+	if !strings.Contains(plain(e), "no longer matched") {
+		t.Errorf("no warning:\n%s", plain(e))
 	}
 }

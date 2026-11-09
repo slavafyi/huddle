@@ -89,6 +89,7 @@ summary line counts each shown group.
 **Tasks filters** (`t`): all, assigned to me, lead and not assigned to me.
 Labels: ClickUp "Mine + Lead / Assigned / Lead only"; GitHub "All /
 Assigned / Opened by me"; both sources "All / Assigned / Lead / opened".
+ClickUp without a lead field (§5) has only "Assigned".
 
 ### 4.3 Task actions
 
@@ -190,11 +191,12 @@ go by status name; unknown names are green when done, else faint.
   ```toml
   [work]
   clickup           = true               # this profile shows ClickUp tasks
-  clickup_workspace = "1234567"          # required with clickup for now (§14.4 step 4)
-  clickup_lead      = "11111111-…"       # the "Lead Assignee" field
   github_account    = "slavafyi"         # optional
   github_orgs       = ["vertexdigital"]  # GitHub issues and PRs in these orgs
   # github_issues   = false              # turn the GitHub issues source off
+  # found automatically; set only to override:
+  # clickup_workspace = "1234567"
+  # clickup_lead      = "11111111-…"     # the "Lead Assignee" field
 
   [personal]
   github_account = "slavafyi"
@@ -210,10 +212,24 @@ go by status name; unknown names are green when done, else faint.
   never stored or logged.
   **`github_issues`:** on unless set to `false`.
 
+  **ClickUp auto-detect:** a setting left out is found at start. The
+  workspace is the only one the token sees (`GET /team`); several →
+  error naming them (ID and name) and asking for `clickup_workspace`;
+  none → error. The lead field is the one `users` custom field of that
+  workspace whose name contains "lead", any case
+  (`GET /team/{id}/field`); several → error listing them and asking for
+  `clickup_lead`; none → lead features off (no "Waiting on others", only
+  the "Assigned" filter, no lead query) with a one-time faint note.
+  Found IDs are kept in `~/.cache/huddle/<profile>/clickup.json`, so a
+  normal start makes no extra calls; a missing or unreadable file means
+  detect again. When a task fetch gets a 4xx answer (not 429), huddle
+  detects again; if the IDs changed it saves them, retries once and shows
+  a yellow warning in the flash line. Set values always win and are never
+  detected or replaced.
+
   A profile may override `repo_roots`, `scratch_root` and
-  `prompt_template`. Unknown settings, no profiles, a profile name other
-  than letters, digits, `-` and `_`, or a ClickUp profile without
-  workspace and lead are errors at start.
+  `prompt_template`. Unknown settings, no profiles, or a profile name
+  other than letters, digits, `-` and `_` are errors at start.
 - **Which profile:** `huddle -p <name>` (an unknown name lists the valid
   ones); else the last used one (`~/.local/state/huddle/last_profile`);
   else the first in the file. `P` opens a picker (most recently used first,
@@ -319,7 +335,11 @@ Live checks (read-only, or throwaway Rex sessions) run with
 Focusing a tab in the Mac app uses the `session.select` client action, so
 Rex **Remote Control** must be on. If it's off, show a hint.
 
-## 14. Next: profiles and GitHub issues (planned; steps 1–3 built)
+## 14. Profiles and GitHub issues (done; steps 1–4 built)
+
+All of this is built. The main sections (§4, §5) hold the current
+behavior and win where this plan differs; this section stays as the
+record of the decision.
 
 Decided 2026-11-10.
 
@@ -390,4 +410,4 @@ Built: see §4.1–§4.6 (decided details there override this sketch).
    and state (§5). `github_account` is used from step 3.
 3. **Built.** GitHub issues source, `github_account` token and org split
    for issues and PRs (§4.1–§4.6, §5). Cache version 3.
-4. ClickUp auto-detect for workspace and lead field.
+4. **Built.** ClickUp auto-detect for workspace and lead field (§5).
