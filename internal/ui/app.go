@@ -62,6 +62,12 @@ type App struct {
 	syncErr      error
 
 	tasks *taskView
+
+	mode        mode
+	picker      picker
+	statuses    map[string][]clickup.Status
+	input       string
+	commentTask string
 }
 
 // Messages.
@@ -86,7 +92,7 @@ func NewApp(d Deps) *App {
 	if d.Runner == nil {
 		d.Runner = run.Exec{}
 	}
-	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView()}
+	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView(), statuses: map[string][]clickup.Status{}}
 	a.applyCache(d.Cache)
 	return a
 }
@@ -169,7 +175,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width, a.height = msg.Width, msg.Height
 	case tea.KeyPressMsg:
-		return a, a.handleKey(msg.String())
+		return a, a.handleKey(msg)
 	case tickMsg:
 		cmds := []tea.Cmd{a.tick()}
 		if full, due := a.tasksDue(); due {
@@ -191,13 +197,29 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.rebuild()
 		return a, a.saveCache()
+	case statusesMsg:
+		if msg.err != nil {
+			a.flash = sRed.Render(msg.err.Error())
+			return a, nil
+		}
+		a.statuses[msg.listID] = msg.statuses
+		a.showPicker(msg.taskID, msg.statuses)
+	case writeMsg:
+		return a, a.onWrite(msg)
 	case errMsg:
 		a.flash = sRed.Render(msg.err.Error())
 	}
 	return a, nil
 }
 
-func (a *App) handleKey(k string) tea.Cmd {
+func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
+	k := msg.String()
+	switch a.mode {
+	case modeStatus:
+		return a.pickerKey(k)
+	case modeComment:
+		return a.commentKey(msg)
+	}
 	switch k {
 	case "q", "ctrl+c":
 		return tea.Quit
@@ -226,10 +248,30 @@ func (a *App) taskKey(k string) tea.Cmd {
 	case "t":
 		a.tasks.filter = (a.tasks.filter + 1) % 3
 		a.rebuild()
+	default:
+		return a.taskAction(k)
+	}
+	return nil
+}
+
+// taskAction handles keys that act on the selected task, in any view that
+// lists tasks.
+func (a *App) taskAction(k string) tea.Cmd {
+	t, ok := a.selectedTask()
+	if !ok {
+		return nil
+	}
+	switch k {
 	case "o":
-		if t, ok := a.selectedTask(); ok && t.URL != "" {
+		if t.URL != "" {
 			return a.runCmd(run.Cmd{Name: "open", Args: []string{t.URL}})
 		}
+	case "s":
+		return a.openStatusPicker(t)
+	case "c":
+		a.mode, a.input, a.commentTask = modeComment, "", t.ID
+	case "a":
+		return a.toggleAssign(t)
 	}
 	return nil
 }
@@ -301,8 +343,16 @@ func (a *App) Render() string {
 		}
 		b.WriteString(ansi.Truncate(line, a.width, "…") + "\n")
 	}
-	b.WriteString(ansi.Truncate(a.flash, a.width, "…") + "\n")
+	flash := a.flash
+	if a.mode == modeComment {
+		t, _ := a.taskByID(a.commentTask)
+		flash = sBold.Render("comment "+t.Key()+": ") + a.input + "▏" + sFaint.Render("  enter send · esc cancel")
+	}
+	b.WriteString(ansi.Truncate(flash, a.width, "…") + "\n")
 	b.WriteString(ansi.Truncate(sFaint.Render(keys), a.width, "…"))
+	if a.mode == modeStatus {
+		return overlay(b.String(), a.renderPicker(), max(2, (a.width-44)/2), 2)
+	}
 	return b.String()
 }
 
@@ -330,7 +380,7 @@ func (a *App) viewParts() (sub string, body func(h int) string, detail []string,
 		if t, ok := a.selectedTask(); ok {
 			detail = taskDetail(t, me, now)
 		}
-		keys = "j/k move · t filter · o open in ClickUp · r refresh · 1–4 views · q quit"
+		keys = "j/k move · s status · c comment · a assign · o open · t filter · r refresh · q quit"
 	default:
 		sub = sFaint.Render(tabNames[a.tab])
 		body = func(int) string { return sFaint.Render("coming soon") }
