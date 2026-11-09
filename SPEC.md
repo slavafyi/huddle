@@ -411,3 +411,49 @@ Built: see §4.1–§4.6 (decided details there override this sketch).
 3. **Built.** GitHub issues source, `github_account` token and org split
    for issues and PRs (§4.1–§4.6, §5). Cache version 3.
 4. **Built.** ClickUp auto-detect for workspace and lead field (§5).
+
+## 15. Views per source and theme fixes (planned)
+
+Decided 2026-11-09. When built, fold into §4, §5 and §4.8.
+
+**Why:** in koda-dark (Rex theme) ANSI blue is `#777777` and faint text
+`#888888`, so the blue active tab and filter look like the inactive ones;
+the profile picker marks its cursor only with bold. At work every task is
+a ClickUp task tied to a PR; GitHub issues are extra notes, so mixing
+them into Today (the "Open" group) is noise.
+
+### 15.1 Tabs per source
+
+- One list tab per task source, named by the source: ClickUp → **Tasks**,
+  GitHub issues → **Issues**. A tab shows only that source's items, its
+  filters and columns.
+- work (ClickUp + issues in `github_orgs`): `1 Today  2 Tasks  3 Issues
+  4 PRs  5 Agents`. personal (GitHub only): `1 Today  2 Issues  3 PRs
+  4 Agents`. A profile with `github_issues = false` has no Issues tab.
+  `1–9` and `tab` follow the tabs shown.
+- Issues tab: grouped by repo, rows `#42`, columns ID / TITLE / LABELS /
+  AGE; filters All / Assigned / Opened by me.
+
+### 15.2 Today
+
+- Today shows the profile's **main source** only: ClickUp when the
+  profile has `clickup = true`, else GitHub issues. So work Today is
+  ClickUp groups only (§4.2 first table); personal Today is the GitHub
+  groups (§4.2 second table). The mixed-union rule in §4.2 goes away.
+
+### 15.3 Theme fixes
+
+- Active tab and active filter: **bold, default color** (no blue).
+  Inactive: faint.
+- Profile picker: fixed columns `● 1 work  …  ClickUp · vertexdigital` —
+  current mark (green ●) / number / name / summary right-aligned. The
+  cursor row is **reverse** like list rows and starts on the next profile.
+- Rule for §4.8: meaning never depends on blue, yellow, magenta or cyan
+  alone (they are grey in koda-dark); use bold / faint / reverse, red and
+  green.
+
+### 15.4 Build order
+
+1. Theme fixes (§15.3), with tests on the rendered tab bar and picker.
+2. Tabs per source and Today = main source (§15.1–15.2); fold §15 into
+   §4 / §5.
