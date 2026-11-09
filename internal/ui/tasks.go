@@ -57,8 +57,7 @@ func (v *taskView) subHeader(tasks []clickup.Task, me int64) string {
 			parts = append(parts, sFaint.Render(label))
 		}
 	}
-	return strings.Join(parts, "   ") + "\n" +
-		sFaint.Render("assigned to you, or you are lead · grouped by status · t switch filter")
+	return strings.Join(parts, "   ")
 }
 
 func fmtWith(t clickup.Task, me int64) string {

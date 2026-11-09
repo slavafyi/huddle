@@ -59,7 +59,7 @@ func TestSelectionMovesAndShowsDetail(t *testing.T) {
 		t.Fatal("j did not move")
 	}
 	task, _ := e.app.taskByID(second.key)
-	_, _, detail, _ := e.app.viewParts()
+	_, _, detail := e.app.viewParts()
 	got := ansi.Strip(strings.Join(detail, "\n"))
 	if !strings.Contains(got, task.Name) || !strings.Contains(got, task.Key()) {
 		t.Errorf("detail for %s wrong:\n%s", task.Key(), got)

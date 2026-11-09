@@ -50,12 +50,12 @@ func TestAgentsViewShowsLiveStates(t *testing.T) {
 func TestAgentDetailShowsLastLineAndMessage(t *testing.T) {
 	e := agentsEnv(t)
 	e.press("4")
-	_, _, detail, _ := e.app.viewParts()
+	_, _, detail := e.app.viewParts()
 	if got := strings.Join(detail, "\n"); !strings.Contains(got, "Which Railway environment?") {
 		t.Errorf("blocked message missing: %s", got)
 	}
 	e.press("j") // Working: DEV-7808
-	_, _, detail, _ = e.app.viewParts()
+	_, _, detail = e.app.viewParts()
 	if got := strings.Join(detail, "\n"); !strings.Contains(got, "Running pnpm test") {
 		t.Errorf("last line missing: %s", got)
 	}

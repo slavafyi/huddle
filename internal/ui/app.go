@@ -302,6 +302,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	k := msg.String()
 	switch a.mode {
+	case modeHelp:
+		a.mode = modeNormal // any key closes help
+		return nil
 	case modeStatus:
 		return a.pickerKey(k)
 	case modeComment:
@@ -312,6 +315,9 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return a.confirmKey(k)
 	}
 	switch k {
+	case "?":
+		a.mode = modeHelp
+		return nil
 	case "q", "ctrl+c":
 		return tea.Quit
 	case "1", "2", "3", "4":
@@ -478,9 +484,9 @@ const detailLines = 4
 
 // Render returns the screen as a string.
 func (a *App) Render() string {
-	sub, body, detail, keys := a.viewParts()
+	sub, body, detail := a.viewParts()
 	subLines := strings.Split(sub, "\n")
-	bodyH := a.height - 2 - len(subLines) - 1 - (detailLines + 1) - 2
+	bodyH := a.height - 2 - len(subLines) - 1 - (detailLines + 1) - 1
 	var b strings.Builder
 	b.WriteString(a.tabBar() + "\n")
 	b.WriteString(sFaint.Render(strings.Repeat("─", a.width)) + "\n")
@@ -505,9 +511,14 @@ func (a *App) Render() string {
 		t, _ := a.taskByID(a.commentTask)
 		flash = sBold.Render("comment "+t.Key()+": ") + a.input + "▏" + sFaint.Render("  enter send · esc cancel")
 	}
-	b.WriteString(ansi.Truncate(flash, a.width, "…") + "\n")
-	b.WriteString(ansi.Truncate(sFaint.Render(keys), a.width, "…"))
+	// Last line: messages on the left, the help key on the right.
+	help := sFaint.Render("? keys")
+	flash = ansi.Truncate(flash, max(0, a.width-ansi.StringWidth(help)-2), "…")
+	b.WriteString(flash + strings.Repeat(" ", max(1, a.width-ansi.StringWidth(flash)-ansi.StringWidth(help))) + help)
 	switch a.mode {
+	case modeHelp:
+		lines := a.renderHelp()
+		return overlay(b.String(), lines, max(0, (a.width-helpWidth)/2), max(1, (a.height-len(lines))/2))
 	case modeStatus:
 		return overlay(b.String(), a.renderPicker(), max(2, (a.width-44)/2), 2)
 	case modeStart:
@@ -531,7 +542,7 @@ func pad(s string, h int) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-func (a *App) viewParts() (sub string, body func(h int) string, detail []string, keys string) {
+func (a *App) viewParts() (sub string, body func(h int) string, detail []string) {
 	me, now := a.cache.Me.ID, a.now()
 	switch a.tab {
 	case TabToday:
@@ -540,14 +551,12 @@ func (a *App) viewParts() (sub string, body func(h int) string, detail []string,
 		if t, ok := a.selectedTask(); ok {
 			detail = taskDetail(t, me, now)
 		}
-		keys = "j/k move · enter start · s status · c comment · a assign · o open · p PR · q quit"
 	case TabTasks:
 		sub = a.tasks.subHeader(a.cache.Tasks, me)
 		body = func(h int) string { return a.tasks.list.render(a.bodyWidth(), h) }
 		if t, ok := a.selectedTask(); ok {
 			detail = taskDetail(t, me, now)
 		}
-		keys = "j/k move · enter start · s status · c comment · a assign · o open · p PR · t filter · q quit"
 	case TabPRs:
 		var mine, review int
 		for _, p := range a.cache.PRs {
@@ -558,25 +567,20 @@ func (a *App) viewParts() (sub string, body func(h int) string, detail []string,
 				review++
 			}
 		}
-		sub = sFaint.Render(fmt.Sprintf("%d mine · %d review requested · from gh · linked to tasks by task ID in the branch", mine, review))
+		sub = sFaint.Render(fmt.Sprintf("%d mine · %d review requested", mine, review))
 		if a.prErr != nil {
-			sub += "\n" + sRed.Render(a.prErr.Error())
-		} else {
-			sub += "\n" + sFaint.Render("enter diff in a Rex tab · o open on GitHub")
+			sub += sFaint.Render(" · ") + sRed.Render(a.prErr.Error())
 		}
 		body = func(h int) string { return a.prs.list.render(a.bodyWidth(), h) }
 		if p, ok := a.selectedPR(); ok {
 			detail = prDetail(p)
 		}
-		keys = "j/k move · enter diff · o open · r refresh · tab/1–4 views · q quit"
 	case TabAgents:
-		sub = sFaint.Render(plural(len(a.state.Agents), "agent")+" · tabs started by cuddle, live from Rex") + "\n" +
-			sFaint.Render("enter focus tab · x close tab · X remove merged worktrees (both ask first)")
+		sub = sFaint.Render(plural(len(a.state.Agents), "agent") + " started by cuddle")
 		body = func(h int) string { return a.agents.list.render(a.bodyWidth(), h) }
 		if ag, ok := a.selectedAgent(); ok {
 			detail = agentDetail(ag, a.agentInfo[ag.BlockID])
 		}
-		keys = "j/k move · enter focus · x close · X clean merged · r refresh · tab/1–4 views · q quit"
 	}
 	return
 }

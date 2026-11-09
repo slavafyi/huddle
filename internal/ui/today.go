@@ -57,6 +57,5 @@ func (v *todayView) rebuild(tasks []clickup.Task, me int64, now time.Time, agent
 
 func (v *todayView) subHeader(now time.Time) string {
 	return sFaint.Render(fmt.Sprintf("%s · %d in progress · %d up next · %d waiting · %d done this week",
-		now.Format("Mon, Jan 2"), v.counts[0], v.counts[1], v.counts[2], v.counts[3])) + "\n" +
-		sFaint.Render("enter start or focus agent · s status · c comment · o open in ClickUp")
+		now.Format("Mon, Jan 2"), v.counts[0], v.counts[1], v.counts[2], v.counts[3]))
 }

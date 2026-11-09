@@ -459,13 +459,13 @@ func (a *App) renderStart(height int) []string {
 		sCyan.Render(t.Key()) + " " + t.Name,
 		sFaint.Render(t.ListName + " · " + t.Status),
 		"",
-		label(fWorkspace, "Workspace · space"),
+		label(fWorkspace, "Workspace"),
 		"  " + opt(p.kind == workspace.Worktree, "worktree") + "  " + opt(p.kind == workspace.Checkout, "checkout") + "  " + opt(p.kind == workspace.Scratch, "scratch"),
 	}
 	if p.kind != workspace.Scratch {
-		head := "Repo · type to filter · space next"
+		head := "Repo"
 		if p.repoFilter != "" {
-			head = "Repo · filter: " + p.repoFilter + caret(fRepo)
+			head = `Repo · "` + p.repoFilter + `"` + caret(fRepo)
 		}
 		lines = append(lines, label(fRepo, head))
 		rs := p.filtered()
@@ -505,7 +505,7 @@ func (a *App) renderStart(height int) []string {
 	for i, n := range p.agents {
 		agents = append(agents, opt(i == p.agentIdx, n))
 	}
-	lines = append(lines, label(fAgent, "Agent · space"), "  "+strings.Join(agents, "  "))
+	lines = append(lines, label(fAgent, "Agent"), "  "+strings.Join(agents, "  "))
 	lines = append(lines, label(fPrompt, "Prompt"))
 	// Wrap the prompt so all of it shows; keep the end (where you type)
 	// when it is very long.
@@ -528,7 +528,7 @@ func (a *App) renderStart(height int) []string {
 	if p.showAssign {
 		lines = append(lines, label(fAssign, check(p.assign)+" Assign to me"+sFaint.Render(" (now: "+clickup.With(t, a.cache.Me.ID)+")")))
 	}
-	lines = append(lines, "", sMagenta.Reverse(true).Bold(true).Render(" Launch · ctrl-s ")+sFaint.Render("  esc close · tab field · space value"))
+	lines = append(lines, "", sMagenta.Reverse(true).Bold(true).Render(" Launch ⌃S "))
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, inner, "…")
 	}

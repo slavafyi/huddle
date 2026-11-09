@@ -1,0 +1,83 @@
+package ui
+
+import (
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+)
+
+// helpWidth is the help popup's width, border included.
+const helpWidth = 70
+
+type keyHelp struct{ key, what string }
+
+var (
+	taskKeys = []keyHelp{
+		{"j / k", "move"},
+		{"enter", "start / focus agent"},
+		{"shift+enter", "start another agent"},
+		{"s", "status"},
+		{"c", "comment"},
+		{"a", "assign me"},
+		{"o / p", "open task / PR"},
+	}
+	panelKeys = []keyHelp{
+		{"tab", "next field"},
+		{"space", "change value"},
+		{"ctrl+s", "launch"},
+		{"esc", "close"},
+	}
+	anywhereKeys = []keyHelp{
+		{"tab / 1–4", "switch view"},
+		{"r", "refresh"},
+		{"?", "keys"},
+		{"q", "quit"},
+	}
+)
+
+// viewKeys returns the title and keys of the current view.
+func (a *App) viewKeys() (string, []keyHelp) {
+	switch a.tab {
+	case TabTasks:
+		return "Tasks", append(append([]keyHelp(nil), taskKeys...), keyHelp{"t", "filter"})
+	case TabPRs:
+		return "PRs", []keyHelp{{"j / k", "move"}, {"enter", "diff in a Rex tab"}, {"o", "open on GitHub"}}
+	case TabAgents:
+		return "Agents", []keyHelp{{"j / k", "move"}, {"enter", "focus tab"}, {"x", "close tab"}, {"X", "clean merged"}}
+	}
+	return "Today", taskKeys
+}
+
+func helpGroup(title string, keys []keyHelp) []string {
+	lines := []string{sBold.Render(title)}
+	for _, k := range keys {
+		lines = append(lines, "  "+k.key+strings.Repeat(" ", max(1, 13-ansi.StringWidth(k.key)))+sFaint.Render(k.what))
+	}
+	return lines
+}
+
+// renderHelp draws the key popup: the current view on the left, the Start
+// panel (for task views) and global keys on the right.
+func (a *App) renderHelp() []string {
+	title, keys := a.viewKeys()
+	left := helpGroup(title, keys)
+	var right []string
+	if a.tab == TabToday || a.tab == TabTasks {
+		right = append(helpGroup("Start panel", panelKeys), "")
+	}
+	right = append(right, helpGroup("Anywhere", anywhereKeys)...)
+	const col = 36
+	var lines []string
+	for i := 0; i < max(len(left), len(right)); i++ {
+		l, r := "", ""
+		if i < len(left) {
+			l = left[i]
+		}
+		if i < len(right) {
+			r = right[i]
+		}
+		lines = append(lines, l+strings.Repeat(" ", max(1, col-ansi.StringWidth(l)))+r)
+	}
+	lines = append(lines, "", sFaint.Render("any key closes"))
+	return box(lines, helpWidth)
+}

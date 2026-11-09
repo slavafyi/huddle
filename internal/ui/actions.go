@@ -19,6 +19,7 @@ const (
 	modeComment
 	modeStart
 	modeConfirm
+	modeHelp
 )
 
 type (

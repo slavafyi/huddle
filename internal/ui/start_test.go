@@ -32,7 +32,7 @@ func TestEnterOpensStartPanelWithDefaults(t *testing.T) {
 		t.Errorf("move=%v showAssign=%v", p.moveStatus, p.showAssign)
 	}
 	out := plain(e)
-	for _, want := range []string{"Start task", "DEV-7700", "● worktree", "snowcap", "feature/dev-7700-promo", "Take a task DEV-7700 from CU", "new tab in session Snowcap", "Move to in progress", "ctrl-s"} {
+	for _, want := range []string{"Start task", "DEV-7700", "● worktree", "snowcap", "feature/dev-7700-promo", "Take a task DEV-7700 from CU", "new tab in session Snowcap", "Move to in progress", "Launch ⌃S"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("panel missing %q:\n%s", want, out)
 		}
