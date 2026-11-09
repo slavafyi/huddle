@@ -157,3 +157,60 @@ func TestLaunchErrorKeepsPanelClosedAndShowsError(t *testing.T) {
 		t.Errorf("later steps ran: rex=%v cu=%v", e.rex.calls, e.cu.writes)
 	}
 }
+
+func TestPanelKeysWithoutArrows(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t2")
+	e.press("enter")
+	p := e.app.start
+	e.press("l") // workspace: worktree → checkout
+	if p.kind != workspace.Checkout {
+		t.Fatalf("l: kind = %v", p.kind)
+	}
+	e.press("h", "space") // back to worktree, then space → checkout
+	if p.kind != workspace.Checkout {
+		t.Fatalf("h/space: kind = %v", p.kind)
+	}
+	e.press("j") // → repo field
+	if p.field != fRepo {
+		t.Fatalf("j: field = %v", p.field)
+	}
+	first, _ := p.repo()
+	e.press("ctrl+n")
+	if r, _ := p.repo(); r.Name == first.Name {
+		t.Error("ctrl+n did not pick the next repo")
+	}
+	e.press("ctrl+p")
+	if r, _ := p.repo(); r.Name != first.Name {
+		t.Error("ctrl+p did not go back")
+	}
+	e.press("j") // typed into the filter, not a field move
+	if p.field != fRepo || p.repoFilter != "j" {
+		t.Errorf("j in repo filter: field=%v filter=%q", p.field, p.repoFilter)
+	}
+	e.press("backspace", "tab") // → agent (checkout has no branch)
+	if p.field != fAgent {
+		t.Fatalf("tab: field = %v", p.field)
+	}
+	e.press("l")
+	if p.agents[p.agentIdx] != "codex" {
+		t.Errorf("l on agent: %s", p.agents[p.agentIdx])
+	}
+	e.press("k") // back to repo
+	if p.field != fRepo {
+		t.Errorf("k: field = %v", p.field)
+	}
+}
+
+func TestLongPromptWrapsInsteadOfCutting(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t2")
+	e.press("enter")
+	e.app.start.prompt = "Take a task DEV-7700 from CU and also check the Promo docs for the checkout widget before you start END"
+	out := plain(e)
+	if !strings.Contains(out, "END") {
+		t.Errorf("end of a long prompt is hidden:\n%s", out)
+	}
+}

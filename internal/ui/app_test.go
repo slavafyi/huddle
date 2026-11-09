@@ -21,6 +21,24 @@ func key(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}
 	case "ctrl+c":
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	case "ctrl+n":
+		return tea.KeyPressMsg{Code: 'n', Mod: tea.ModCtrl}
+	case "ctrl+p":
+		return tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl}
+	case "tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab}
+	case "shift+tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
+	case "space":
+		return tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
+	case "left":
+		return tea.KeyPressMsg{Code: tea.KeyLeft}
+	case "right":
+		return tea.KeyPressMsg{Code: tea.KeyRight}
+	case "up":
+		return tea.KeyPressMsg{Code: tea.KeyUp}
+	case "down":
+		return tea.KeyPressMsg{Code: tea.KeyDown}
 	}
 	r := []rune(s)[0]
 	return tea.KeyPressMsg{Code: r, Text: s}
@@ -65,9 +83,27 @@ func TestQuitKeys(t *testing.T) {
 	}
 }
 
-func TestViewUsesAltScreen(t *testing.T) {
+func TestViewUsesAltScreenAndTitle(t *testing.T) {
 	v := NewApp(Deps{}).View()
 	if !v.AltScreen {
 		t.Error("want alt screen")
+	}
+	if v.WindowTitle != "Cuddle" {
+		t.Errorf("title = %q", v.WindowTitle)
+	}
+}
+
+func TestTabCyclesViews(t *testing.T) {
+	var m tea.Model = NewApp(Deps{})
+	want := []Tab{TabTasks, TabPRs, TabAgents, TabToday}
+	for _, w := range want {
+		m, _ = press(t, m, "tab")
+		if got := m.(*App).tab; got != w {
+			t.Fatalf("tab: got %v want %v", got, w)
+		}
+	}
+	m, _ = press(t, m, "shift+tab")
+	if got := m.(*App).tab; got != TabAgents {
+		t.Errorf("shift+tab from Today: got %v", got)
 	}
 }

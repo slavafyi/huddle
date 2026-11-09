@@ -318,6 +318,14 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		a.tab = Tab(k[0] - '1')
 		a.flash = ""
 		return nil
+	case "tab", "shift+tab":
+		d := 1
+		if k == "shift+tab" {
+			d = -1
+		}
+		a.tab = Tab(cycle(int(a.tab), d, len(tabNames)))
+		a.flash = ""
+		return nil
 	case "r":
 		a.flash = sFaint.Render("refreshing…")
 		return tea.Batch(a.refreshTasks(true), a.refreshPRs(), a.refreshAgents())
@@ -462,7 +470,7 @@ func (a *App) runCmd(c run.Cmd) tea.Cmd {
 func (a *App) View() tea.View {
 	v := tea.NewView(a.Render())
 	v.AltScreen = true
-	v.WindowTitle = "cuddle"
+	v.WindowTitle = "Cuddle"
 	return v
 }
 
@@ -560,7 +568,7 @@ func (a *App) viewParts() (sub string, body func(h int) string, detail []string,
 		if p, ok := a.selectedPR(); ok {
 			detail = prDetail(p)
 		}
-		keys = "j/k move · enter diff · o open · r refresh · 1–4 views · q quit"
+		keys = "j/k move · enter diff · o open · r refresh · tab/1–4 views · q quit"
 	case TabAgents:
 		sub = sFaint.Render(plural(len(a.state.Agents), "agent")+" · tabs started by cuddle, live from Rex") + "\n" +
 			sFaint.Render("enter focus tab · x close tab · X remove merged worktrees (both ask first)")
@@ -568,7 +576,7 @@ func (a *App) viewParts() (sub string, body func(h int) string, detail []string,
 		if ag, ok := a.selectedAgent(); ok {
 			detail = agentDetail(ag, a.agentInfo[ag.BlockID])
 		}
-		keys = "j/k move · enter focus · x close · X clean merged · r refresh · 1–4 views · q quit"
+		keys = "j/k move · enter focus · x close · X clean merged · r refresh · tab/1–4 views · q quit"
 	}
 	return
 }

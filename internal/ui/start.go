@@ -22,6 +22,9 @@ import (
 // panelWidth is the Start panel's width, border included.
 const panelWidth = 54
 
+// maxPromptLines is how many lines of the prompt the panel shows.
+const maxPromptLines = 6
+
 type field int
 
 const (
@@ -225,24 +228,34 @@ func (a *App) startKey(msg tea.KeyPressMsg) tea.Cmd {
 		if k == "left" {
 			d = -1
 		}
-		switch p.field {
-		case fWorkspace:
-			p.kind = workspace.Kind(cycle(int(p.kind), d, 3))
-		case fRepo:
+		p.change(d)
+		return nil
+	case "ctrl+n", "ctrl+p":
+		if p.field == fRepo {
+			d := 1
+			if k == "ctrl+p" {
+				d = -1
+			}
 			p.repoIdx = cycle(p.repoIdx, d, len(p.filtered()))
-		case fAgent:
-			p.agentIdx = cycle(p.agentIdx, d, len(p.agents))
 		}
 		return nil
-	case "space":
-		switch p.field {
-		case fMove:
-			p.moveStatus = !p.moveStatus
-			return nil
-		case fAssign:
-			p.assign = !p.assign
-			return nil
+	}
+	// Choice fields have no text, so letters can navigate: j/k move between
+	// fields, h/l/space change the value.
+	if p.field.isChoice() {
+		switch k {
+		case "j":
+			p.moveField(1)
+		case "k":
+			p.moveField(-1)
+		case "l", "space":
+			p.change(1)
+		case "h":
+			p.change(-1)
 		}
+		return nil
+	}
+	switch k {
 	case "backspace":
 		switch p.field {
 		case fRepo:
@@ -267,6 +280,27 @@ func (a *App) startKey(msg tea.KeyPressMsg) tea.Cmd {
 		p.prompt += msg.Text
 	}
 	return nil
+}
+
+// isChoice reports whether a field has options instead of text.
+func (f field) isChoice() bool {
+	return f == fWorkspace || f == fAgent || f == fMove || f == fAssign
+}
+
+// change moves the current field's value by d (checkboxes toggle).
+func (p *startPanel) change(d int) {
+	switch p.field {
+	case fWorkspace:
+		p.kind = workspace.Kind(cycle(int(p.kind), d, 3))
+	case fRepo:
+		p.repoIdx = cycle(p.repoIdx, d, len(p.filtered()))
+	case fAgent:
+		p.agentIdx = cycle(p.agentIdx, d, len(p.agents))
+	case fMove:
+		p.moveStatus = !p.moveStatus
+	case fAssign:
+		p.assign = !p.assign
+	}
 }
 
 func dropLast(s string) string {
@@ -440,11 +474,11 @@ func (a *App) renderStart(height int) []string {
 		sCyan.Render(t.Key()) + " " + t.Name,
 		sFaint.Render(t.ListName + " · " + t.Status),
 		"",
-		label(fWorkspace, "Workspace ←→"),
+		label(fWorkspace, "Workspace · h/l"),
 		"  " + opt(p.kind == workspace.Worktree, "worktree") + "  " + opt(p.kind == workspace.Checkout, "checkout") + "  " + opt(p.kind == workspace.Scratch, "scratch"),
 	}
 	if p.kind != workspace.Scratch {
-		head := "Repo ←→ · type to filter"
+		head := "Repo · type to filter · ctrl+n/p pick"
 		if p.repoFilter != "" {
 			head = "Repo · filter: " + p.repoFilter + caret(fRepo)
 		}
@@ -486,8 +520,17 @@ func (a *App) renderStart(height int) []string {
 	for i, n := range p.agents {
 		agents = append(agents, opt(i == p.agentIdx, n))
 	}
-	lines = append(lines, label(fAgent, "Agent ←→"), "  "+strings.Join(agents, "  "))
-	lines = append(lines, label(fPrompt, "Prompt"), "  "+p.prompt+caret(fPrompt))
+	lines = append(lines, label(fAgent, "Agent · h/l"), "  "+strings.Join(agents, "  "))
+	lines = append(lines, label(fPrompt, "Prompt"))
+	// Wrap the prompt so all of it shows; keep the end (where you type)
+	// when it is very long.
+	wrapped := strings.Split(ansi.Wrap(p.prompt+caret(fPrompt), inner-2, ""), "\n")
+	if len(wrapped) > maxPromptLines {
+		wrapped = append([]string{sFaint.Render("…")}, wrapped[len(wrapped)-maxPromptLines+1:]...)
+	}
+	for _, l := range wrapped {
+		lines = append(lines, "  "+l)
+	}
 	check := func(on bool) string {
 		if on {
 			return "[x]"
@@ -500,7 +543,7 @@ func (a *App) renderStart(height int) []string {
 	if p.showAssign {
 		lines = append(lines, label(fAssign, check(p.assign)+" Assign to me"+sFaint.Render(" (now: "+clickup.With(t, a.cache.Me.ID)+")")))
 	}
-	lines = append(lines, "", sMagenta.Reverse(true).Bold(true).Render(" Launch · ctrl-s ")+sFaint.Render("  esc close · tab next"))
+	lines = append(lines, "", sMagenta.Reverse(true).Bold(true).Render(" Launch · ctrl-s ")+sFaint.Render("  esc · tab/j/k field · h/l value"))
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, inner, "…")
 	}
