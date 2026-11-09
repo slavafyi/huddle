@@ -521,15 +521,15 @@ Replaces an earlier, busier layout.
 - Short terminal: the prompt shrinks (down to 1 line), then blank lines
   go one by one from the bottom; if still too tall the middle is cut. The
   checkbox rows and `Launch ⏎` always show.
-- Keys: only `tab` / `shift+tab` move between fields; arrows work inside
+- Keys: only `tab` / `shift+tab` (or `ctrl+n` / `ctrl+p`) move between
+  fields; arrows work inside
   the current field. Workspace: `space` and any arrow pick the
   next / previous option. Agent: `space` / `←→` next / previous, `↑↓`
   the row above / below. Checkboxes: `space` or any arrow toggles. Repo:
   `↑↓` move in the list (all repos, or the matches once you type); every
   other key, `space` too, goes into the filter. Branch and Prompt: text;
-  arrows do nothing. `ctrl+n` / `ctrl+p` act like `↓` / `↑` here and in
-  every list (Today, Tasks, Issues, PRs, Agents) and picker. `enter`
-  launches. Workspace default: **checkout**.
+  arrows do nothing. In lists (Today, Tasks, Issues, PRs, Agents) and
+  pickers `ctrl+n` / `ctrl+p` act like `↓` / `↑`. `enter` launches. Workspace default: **checkout**.
 
 ### 16.2 Prompts
 
