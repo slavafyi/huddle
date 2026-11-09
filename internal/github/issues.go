@@ -32,6 +32,7 @@ func (s *Issues) Rules() task.Rules {
 		Groups:         []string{task.GroupInProgress, task.GroupInReview, task.GroupOpen, task.GroupDone},
 		Classify:       classify,
 		FilterNames:    [3]string{"All", "Assigned", "Opened by me"},
+		ListName:       "Issues",
 		RepoInList:     true,
 		BranchTemplate: "feature/{number}-{slug}",
 		PromptTemplate: "Take issue {full_id}",
@@ -181,6 +182,8 @@ func toTask(n issueNode, me int64) task.Task {
 			if t.Priority == "" {
 				t.Priority = "high"
 			}
+		default:
+			t.Labels = append(t.Labels, l.Name)
 		}
 	}
 	return t

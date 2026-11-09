@@ -65,7 +65,7 @@ func TestIssuesFetchFull(t *testing.T) {
 	want := task.Task{
 		Source: IssuesSource, ID: "acme/shop#42", Key: "shop#42", Name: "Fix checkout",
 		URL: "https://github.com/acme/shop/issues/42", Status: "open", ListID: "acme/shop", Project: "shop",
-		Priority: "urgent", Mine: true, Others: []string{"ann"}, Updated: time.Date(2026, 11, 8, 9, 0, 0, 0, time.UTC),
+		Priority: "urgent", Labels: []string{"bug"}, Mine: true, Others: []string{"ann"}, Updated: time.Date(2026, 11, 8, 9, 0, 0, 0, time.UTC),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("issue 42:\n got %+v\nwant %+v", got, want)

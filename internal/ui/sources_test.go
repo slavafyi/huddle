@@ -57,9 +57,9 @@ func withOther(t *testing.T) (*testEnv, *otherSource) {
 func TestTwoSourcesShareTheViews(t *testing.T) {
 	e, o := withOther(t)
 	e.load(t)
-	out := plain(e)
-	if !strings.Contains(out, "repo#1") || !strings.Contains(out, "DEV-7808") {
-		t.Fatalf("both sources should show in Today:\n%s", out)
+	e.press("3")
+	if out := plain(e); !strings.Contains(out, "repo#1") {
+		t.Fatalf("the second source has its own tab:\n%s", out)
 	}
 	if c := e.cacheOnDisk(t); c.Me["other"] != 7 || c.Me["clickup"] != 1 {
 		t.Errorf("me by source = %v", c.Me)
@@ -69,7 +69,7 @@ func TestTwoSourcesShareTheViews(t *testing.T) {
 	// and ClickUp's full refresh doesn't drop them either.
 	o.err = errOffline
 	e.load(t)
-	if out := plain(e); !strings.Contains(out, "repo#1") || !strings.Contains(out, "DEV-7808") {
+	if out := plain(e); !strings.Contains(out, "repo#1") || !e.app.hasTask("DEV-7808") {
 		t.Fatalf("failed source lost its tasks:\n%s", out)
 	}
 	if e.app.syncErr == nil {
@@ -78,7 +78,7 @@ func TestTwoSourcesShareTheViews(t *testing.T) {
 
 	// Writes go to the task's own source, even with the same ID.
 	o.err = nil
-	e.press("2")
+	e.press("3")
 	for i := 0; i < 20; i++ {
 		if r, _ := e.app.tasks.list.selected(); r.key == task.Ref("other", "t1") {
 			break
@@ -107,4 +107,14 @@ func TestStatusStyleFallsBackOnDone(t *testing.T) {
 	if got, want := statusStyle("in progress", false).Render("x"), sBlue.Render("x"); got != want {
 		t.Errorf("known status = %q", got)
 	}
+}
+
+// hasTask reports whether a task with that key is cached.
+func (a *App) hasTask(key string) bool {
+	for _, t := range a.cache.Tasks {
+		if t.Key == key {
+			return true
+		}
+	}
+	return false
 }

@@ -2,24 +2,46 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/slavafyi/huddle/internal/task"
 )
 
-// taskView is the Tasks tab.
+// taskView is one source's list tab: Tasks for ClickUp, Issues for GitHub
+// issues.
 type taskView struct {
 	list   list
 	filter task.TaskFilter
-	names  [3]string // filter labels, from the sources' rules
+	names  [3]string // filter labels, from the source's rules
+	source string    // the source shown; "" with no sources
+	title  string    // tab name
+	byRepo bool      // group by repo instead of status
 }
 
-func newTaskView() *taskView {
-	return &taskView{list: list{
-		cols:  []column{{"ID", 10}, {"TITLE", 0}, {"CLIENT", 18}, {"DUE", 7}},
-		empty: "no tasks",
-	}}
+func newTaskView(source string, r task.Rules) *taskView {
+	v := &taskView{source: source, title: r.ListName, byRepo: r.RepoInList,
+		names: task.FilterNames(map[string]task.Rules{source: r})}
+	if v.title == "" {
+		v.title = "Tasks"
+	}
+	v.list = list{cols: []column{{"ID", 10}, {"TITLE", 0}, {"CLIENT", 18}, {"DUE", 7}}, empty: "no tasks"}
+	if v.byRepo {
+		v.list = list{cols: []column{{"ID", 6}, {"TITLE", 0}, {"LABELS", 18}, {"UPDATED", 7}}, empty: "no issues"}
+	}
+	return v
+}
+
+// own returns the tasks of the view's source.
+func (v *taskView) own(tasks []task.Task) []task.Task {
+	var out []task.Task
+	for _, t := range tasks {
+		if t.Source == v.source {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // openTasks returns tasks that are not done.
@@ -34,8 +56,13 @@ func openTasks(ts []task.Task) []task.Task {
 }
 
 func (v *taskView) rebuild(tasks []task.Task, now time.Time, agents agentLookup) {
+	open := task.Filter(openTasks(v.own(tasks)), v.filter)
+	if v.byRepo {
+		v.rebuildByRepo(open, now, agents)
+		return
+	}
 	var secs []section
-	for _, g := range task.ByStatus(task.Filter(openTasks(tasks), v.filter)) {
+	for _, g := range task.ByStatus(open) {
 		s := section{title: g.Name, style: statusStyle(g.Name, false).Render}
 		for _, t := range g.Tasks {
 			s.rows = append(s.rows, row{key: t.Ref(), cells: []string{
@@ -47,9 +74,41 @@ func (v *taskView) rebuild(tasks []task.Task, now time.Time, agents agentLookup)
 	v.list.setSections(secs)
 }
 
+// rebuildByRepo groups tasks by repo (Project), repos by name, newest
+// update first inside.
+func (v *taskView) rebuildByRepo(tasks []task.Task, now time.Time, agents agentLookup) {
+	byRepo := map[string][]task.Task{}
+	var repos []string
+	for _, t := range tasks {
+		if _, ok := byRepo[t.Project]; !ok {
+			repos = append(repos, t.Project)
+		}
+		byRepo[t.Project] = append(byRepo[t.Project], t)
+	}
+	slices.Sort(repos)
+	var secs []section
+	for _, r := range repos {
+		ts := byRepo[r]
+		slices.SortStableFunc(ts, func(a, b task.Task) int { return b.Updated.Compare(a.Updated) })
+		s := section{title: r}
+		for _, t := range ts {
+			upd := "—"
+			if !t.Updated.IsZero() {
+				upd = ago(now.Sub(t.Updated))
+			}
+			s.rows = append(s.rows, row{key: t.Ref(), cells: []string{
+				sFaint.Render(listKey(t)), prioMark(t.Priority) + t.Name + agents.badge(t.Ref()),
+				sFaint.Render(strings.Join(t.Labels, ", ")), sFaint.Render(upd),
+			}})
+		}
+		secs = append(secs, s)
+	}
+	v.list.setSections(secs)
+}
+
 func (v *taskView) subHeader(tasks []task.Task) string {
 	var parts []string
-	open := openTasks(tasks)
+	open := openTasks(v.own(tasks))
 	for f := task.FilterAll; f <= task.FilterLeadOnly; f++ {
 		if v.names[f] == "" {
 			continue // the sources have no such filter

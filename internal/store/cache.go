@@ -10,8 +10,9 @@ import (
 )
 
 // CacheVersion is the current cache file format. Version 2 holds
-// source-neutral tasks; version 3 adds PR closing issues and repo remotes.
-const CacheVersion = 3
+// source-neutral tasks; version 3 adds PR closing issues and repo remotes;
+// version 4 adds task labels.
+const CacheVersion = 4
 
 // Cache is data fetched from task sources and GitHub. It is safe to delete.
 type Cache struct {

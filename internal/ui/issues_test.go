@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/slavafyi/huddle/internal/github"
 	"github.com/slavafyi/huddle/internal/rex"
@@ -48,55 +49,103 @@ func withIssues(t *testing.T) *testEnv {
 	return e
 }
 
-func selectToday(t *testing.T, e *testEnv, ref string) {
+// selectIn opens view and moves to the task with ref.
+func selectIn(t *testing.T, e *testEnv, view, ref string) {
 	t.Helper()
-	e.press("1")
+	e.press(view)
 	for i := 0; i < 30; i++ {
-		if r, _ := e.app.today.list.selected(); r.key == ref {
+		if r, _ := e.app.tasks.list.selected(); r.key == ref {
 			return
 		}
 		e.press("j")
 	}
-	t.Fatalf("task %s not in Today", ref)
+	t.Fatalf("task %s not in view %s", ref, view)
 }
 
-func TestTodayMixesClickUpAndIssueGroups(t *testing.T) {
+func TestEachSourceHasItsOwnTab(t *testing.T) {
 	e := withIssues(t)
-	out := plain(e)
-	order := []string{"In progress 2", "DEV-7808", "#44", "In review 1", "#43", "Up next 2", "Open 2", "#42", "Waiting on others 1", "Done this week 1"}
-	pos := -1
-	for _, want := range order {
-		i := strings.Index(out, want)
-		if i < 0 {
-			t.Fatalf("missing %q in:\n%s", want, out)
-		}
-		if i < pos {
-			t.Errorf("%q out of order", want)
-		}
-		pos = i
-	}
-	if !strings.Contains(out, "Mon, Nov 9 · 2 in progress · 1 in review · 2 up next · 2 open · 1 waiting · 1 done this week") {
-		t.Errorf("summary line wrong:\n%s", out)
+	if bar := ansi.Strip(e.app.tabBar()); !strings.HasPrefix(bar, "1 Today   2 Tasks   3 Issues   4 PRs   5 Agents") {
+		t.Errorf("tab bar = %q", bar)
 	}
 	e.press("2")
-	if out := plain(e); !strings.Contains(out, "All 8") || !strings.Contains(out, "Lead / opened") {
-		t.Errorf("mixed filter labels:\n%s", out)
+	out := plain(e)
+	if !strings.Contains(out, "DEV-7808") || strings.Contains(out, "Fix checkout") || !strings.Contains(out, "Mine + Lead 4") {
+		t.Errorf("Tasks must be ClickUp only:\n%s", out)
+	}
+	e.press("3")
+	out = plain(e)
+	if strings.Contains(out, "DEV-7808") || !strings.Contains(out, "All 4") || !strings.Contains(out, "Opened by me 0") {
+		t.Errorf("Issues must be GitHub only:\n%s", out)
+	}
+	// Grouped by repo, with labels and updated age.
+	for _, want := range []string{"shop 3", "other 1", "LABELS", "UPDATED"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("Issues missing %q:\n%s", want, out)
+		}
+	}
+	e.press("5")
+	if e.app.tab != TabAgents {
+		t.Errorf("5 = %v, want Agents", e.app.tab)
+	}
+	e.press("tab")
+	if e.app.tab != TabToday {
+		t.Errorf("tab after Agents = %v", e.app.tab)
+	}
+}
+
+func TestTodayShowsOnlyTheMainSource(t *testing.T) {
+	e := withIssues(t)
+	out := plain(e)
+	if !strings.Contains(out, "DEV-7808") || strings.Contains(out, "Fix checkout") || strings.Contains(out, "Open ") {
+		t.Errorf("work Today must be ClickUp only:\n%s", out)
+	}
+	if !strings.Contains(out, "Mon, Nov 9 · 1 in progress · 2 up next · 1 waiting · 1 done this week") {
+		t.Errorf("summary line wrong:\n%s", out)
+	}
+}
+
+func TestIssuesOnlyProfile(t *testing.T) {
+	e := withIssues(t)
+	d := e.app.deps
+	d.Sources = d.Sources[1:]
+	e.app = NewApp(d)
+	e.app.agentInfo["b44"] = agentInfo{known: true, alive: true}
+	e.app.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	e.load(t)
+	if bar := ansi.Strip(e.app.tabBar()); !strings.HasPrefix(bar, "1 Today   2 Issues   3 PRs   4 Agents") {
+		t.Errorf("tab bar = %q", bar)
+	}
+	out := plain(e)
+	for _, want := range []string{"In progress 1", "#44", "In review 1", "#43", "Open 2", "#42"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("Today missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestIssueLabelsShowWithoutPriority(t *testing.T) {
+	e := withIssues(t)
+	tk, _ := e.app.taskByRef(task.Ref(github.IssuesSource, "acme/shop#42"))
+	tk.Labels = []string{"bug", "ui"}
+	for i, c := range e.app.cache.Tasks {
+		if c.Ref() == tk.Ref() {
+			e.app.cache.Tasks[i] = tk
+		}
+	}
+	e.app.rebuild()
+	e.press("3")
+	if row := lineWith(plain(e), "Fix checkout"); !strings.Contains(row, "bug, ui") {
+		t.Errorf("row %q", row)
 	}
 }
 
 func TestListRowsShowShortIssueIDs(t *testing.T) {
 	e := withIssues(t)
-	selectToday(t, e, task.Ref(github.IssuesSource, "acme/shop#42"))
-	for _, view := range []string{"1", "2"} {
-		e.press(view)
-		out := plain(e)
-		row := lineWith(out, "Fix checkout")
-		if !strings.Contains(row, "#42") || strings.Contains(row, "shop#42") || !strings.Contains(row, "shop") {
-			t.Errorf("view %s row %q", view, row)
-		}
-		if !strings.Contains(lineWith(out, "DEV-7808"), "DEV-7808") {
-			t.Errorf("view %s: ClickUp ID changed", view)
-		}
+	e.press("3")
+	out := plain(e)
+	row := lineWith(out, "Fix checkout")
+	if !strings.Contains(row, "#42") || strings.Contains(row, "shop#42") {
+		t.Errorf("row %q", row)
 	}
 }
 
@@ -112,7 +161,7 @@ func lineWith(out, s string) string {
 
 func TestStartPanelForIssue(t *testing.T) {
 	e := withIssues(t)
-	selectToday(t, e, task.Ref(github.IssuesSource, "acme/shop#42"))
+	selectIn(t, e, "3", task.Ref(github.IssuesSource, "acme/shop#42"))
 	e.press("enter")
 	p := e.app.start
 	if p == nil {
@@ -141,7 +190,7 @@ func TestStartPanelForIssue(t *testing.T) {
 
 func TestStartPanelForIssueWithoutClone(t *testing.T) {
 	e := withIssues(t)
-	selectToday(t, e, task.Ref(github.IssuesSource, "acme/other#5"))
+	selectIn(t, e, "3", task.Ref(github.IssuesSource, "acme/other#5"))
 	e.press("enter")
 	if !strings.Contains(plain(e), "no local clone of acme/other in repo_roots") {
 		t.Errorf("no message:\n%s", plain(e))

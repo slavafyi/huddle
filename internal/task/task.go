@@ -23,6 +23,7 @@ type Task struct {
 	Project     string    `json:"project"`        // client (ClickUp list) or repo
 	Type        string    `json:"type,omitempty"` // task type, e.g. "Idea"
 	Priority    string    `json:"priority,omitempty"`
+	Labels      []string  `json:"labels,omitempty"` // labels other than priority
 	Mine        bool      `json:"mine,omitempty"`   // assigned to me
 	Lead        bool      `json:"lead,omitempty"`   // I'm the lead
 	Others      []string  `json:"others,omitempty"` // other assignees' names
@@ -92,6 +93,8 @@ type Rules struct {
 	// FilterNames label the Tasks view's filters (all, assigned, lead).
 	// Zero: "Mine + Lead", "Assigned", "Lead only".
 	FilterNames [3]string
+	// ListName names this source's list tab. Zero: "Tasks".
+	ListName string
 	// RepoInList says the task's ListID is its GitHub repo (owner/repo), so
 	// the Start panel needs no repo picker.
 	RepoInList bool

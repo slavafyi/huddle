@@ -56,7 +56,7 @@ last 7 days.
 those closed in the last 7 days, in the profile's org scope (§5). For
 GitHub, "lead" means **opened by me**. Shown as `repo#42` (internal ID
 `owner/repo#42`, unique ref `github:owner/repo#42`); list rows show just
-`#42`, since the group column is the repo; priority from labels `priority:high` / `priority:urgent` (same `!` /
+`#42`; other labels show in the Issues tab; priority from labels `priority:high` / `priority:urgent` (same `!` /
 `!!` marks); statuses `open` / `closed`. One `gh api graphql` search per
 refresh (first 100 per query); incremental refreshes use
 `updated:>=<since>`.
@@ -82,14 +82,22 @@ GitHub issues use their own groups:
 | Open | assigned to me, or opened by me with nobody assigned |
 | Done this week | closed in the last 7 days |
 
-A profile with both sources shows the union of groups in this order: In
-progress, In review, Up next, Open, Waiting on others, Done this week. The
-summary line counts each shown group.
+Today shows only the profile's **main source**: the first one, so ClickUp
+in a profile that has it, else GitHub issues. Work issues stay in their
+own tab (at work every task is a ClickUp task tied to a PR; issues are
+extra notes). The summary line counts each shown group.
 
-**Tasks filters** (`t`): all, assigned to me, lead and not assigned to me.
+**List tabs:** one per source, named by it: ClickUp **Tasks** (grouped by
+status; ID / TITLE / CLIENT / DUE), GitHub **Issues** (grouped by repo,
+newest update first; ID / TITLE / LABELS / UPDATED). Tabs: Today, the
+list tabs in source order, PRs, Agents; `1–9` and `tab` follow them
+(work: Today · Tasks · Issues · PRs · Agents; personal: Today · Issues ·
+PRs · Agents).
+
+**List filters** (`t`): all, assigned to me, lead and not assigned to me.
 Labels: ClickUp "Mine + Lead / Assigned / Lead only"; GitHub "All /
-Assigned / Opened by me"; both sources "All / Assigned / Lead / opened".
-ClickUp without a lead field (§5) has only "Assigned".
+Assigned / Opened by me". ClickUp without a lead field (§5) has only
+"Assigned".
 
 ### 4.3 Task actions
 
@@ -417,9 +425,10 @@ Built: see §4.1–§4.6 (decided details there override this sketch).
    for issues and PRs (§4.1–§4.6, §5). Cache version 3.
 4. **Built.** ClickUp auto-detect for workspace and lead field (§5).
 
-## 15. Views per source and theme fixes (step 1 built)
+## 15. Views per source and theme fixes (done; steps 1–2 built)
 
-Decided 2026-11-09. When built, fold into §4, §5 and §4.8.
+Decided 2026-11-09. Folded into §4.1, §4.2, §4.8 and §5, which win where
+this differs.
 
 **Why:** in koda-dark (Rex theme) ANSI blue is `#777777` and faint text
 `#888888`, so the blue active tab and filter look like the inactive ones;
@@ -460,5 +469,5 @@ them into Today (the "Open" group) is noise.
 ### 15.4 Build order
 
 1. **Built.** Theme fixes (§15.3), folded into §4.8 and §5.
-2. Tabs per source and Today = main source (§15.1–15.2); fold §15 into
-   §4 / §5.
+2. **Built.** Tabs per source and Today = main source (§4.2). Cache
+   version 4 (issue labels). Issues show UPDATED age, not created age.

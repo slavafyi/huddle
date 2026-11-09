@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -40,7 +41,7 @@ var (
 func (a *App) viewKeys() (string, []keyHelp) {
 	switch a.tab {
 	case TabTasks:
-		return "Tasks", append(append([]keyHelp(nil), taskKeys...), keyHelp{"t", "filter"})
+		return a.tasks.title, append(append([]keyHelp(nil), taskKeys...), keyHelp{"t", "filter"})
 	case TabPRs:
 		return "PRs", []keyHelp{{"j / k", "move"}, {"enter", "diff in a Rex tab"}, {"o", "open on GitHub"}}
 	case TabAgents:
@@ -66,7 +67,9 @@ func (a *App) renderHelp() []string {
 	if a.tab == TabToday || a.tab == TabTasks {
 		right = append(helpGroup("Start panel", panelKeys), "")
 	}
-	right = append(right, helpGroup("Anywhere", anywhereKeys)...)
+	anywhere := append([]keyHelp(nil), anywhereKeys...)
+	anywhere[0].key = fmt.Sprintf("tab / 1–%d", len(a.tabs))
+	right = append(right, helpGroup("Anywhere", anywhere)...)
 	const col = 36
 	var lines []string
 	for i := 0; i < max(len(left), len(right)); i++ {

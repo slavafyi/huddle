@@ -21,7 +21,7 @@ import (
 	"github.com/slavafyi/huddle/internal/workspace"
 )
 
-// Tab is one of the four views.
+// Tab is a kind of view. There is one TabTasks tab per task source.
 type Tab int
 
 // The views, in tab order.
@@ -33,6 +33,12 @@ const (
 )
 
 var tabNames = []string{"Today", "Tasks", "PRs", "Agents"}
+
+// tabEntry is one tab in the tab bar.
+type tabEntry struct {
+	kind Tab
+	list *taskView // for TabTasks
+}
 
 // Refresh timing (SPEC §4.7).
 const (
@@ -67,7 +73,10 @@ type Deps struct {
 // App is the root model.
 type App struct {
 	deps   Deps
-	tab    Tab
+	tab    Tab        // kind of the current tab
+	pos    int        // index of the current tab in tabs
+	tabs   []tabEntry // Today, one list per source, PRs, Agents
+	lists  []*taskView
 	width  int
 	height int
 	flash  string
@@ -78,7 +87,7 @@ type App struct {
 	loadingTasks bool
 	syncErr      error
 
-	tasks  *taskView
+	tasks  *taskView // the current (or last shown) list tab
 	today  *todayView
 	agents *agentView
 	prs    *prView
@@ -152,17 +161,25 @@ func NewApp(d Deps) *App {
 	if d.Runner == nil {
 		d.Runner = run.Exec{}
 	}
-	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView(), today: newTodayView(), agents: newAgentView(), prs: newPRView(),
+	a := &App{deps: d, width: 100, height: 30, today: newTodayView(), agents: newAgentView(), prs: newPRView(),
 		statuses: map[string][]task.Status{}, rules: map[string]task.Rules{}, agentInfo: map[string]agentInfo{},
 		ops: map[uint64]*op{}, launching: map[string]bool{}, lastStart: map[string]*startPanel{}, writer: &store.Writer{}}
 	for _, s := range d.Sources {
 		a.rules[s.Name()] = s.Rules()
+		a.lists = append(a.lists, newTaskView(s.Name(), a.rules[s.Name()]))
 	}
-	a.tasks.names = task.FilterNames(a.rules)
 	if len(d.Sources) == 0 {
+		v := newTaskView("", task.Rules{})
+		v.list.empty = "no sources in this profile"
+		a.lists = []*taskView{v}
 		a.today.list.empty = "no sources in this profile"
-		a.tasks.list.empty = "no sources in this profile"
 	}
+	a.tasks = a.lists[0]
+	a.tabs = []tabEntry{{kind: TabToday}}
+	for _, v := range a.lists {
+		a.tabs = append(a.tabs, tabEntry{kind: TabTasks, list: v})
+	}
+	a.tabs = append(a.tabs, tabEntry{kind: TabPRs}, tabEntry{kind: TabAgents})
 	a.state = d.State
 	a.applyCache(d.Cache)
 	return a
@@ -179,10 +196,36 @@ func (a *App) applyCache(c store.Cache) {
 func (a *App) rebuild() {
 	now := a.now()
 	l := a.lookup()
-	a.tasks.rebuild(a.cache.Tasks, now, l)
-	a.today.rebuild(a.cache.Tasks, a.rules, a.signals(l), now, l)
+	for _, v := range a.lists {
+		v.rebuild(a.cache.Tasks, now, l)
+	}
+	main := map[string]task.Rules{}
+	if len(a.deps.Sources) > 0 {
+		n := a.deps.Sources[0].Name()
+		main[n] = a.rules[n]
+	}
+	a.today.rebuild(a.mainTasks(), main, a.signals(l), now, l)
 	a.agents.rebuild(a.state.Agents, a.agentInfo, now)
 	a.prs.rebuild(a.cache.PRs, a.cache.Tasks, now)
+}
+
+// mainTasks are the tasks Today shows: the profile's first source only
+// (ClickUp in a profile that has it).
+func (a *App) mainTasks() []task.Task {
+	if len(a.deps.Sources) == 0 {
+		return nil
+	}
+	return a.lists[0].own(a.cache.Tasks)
+}
+
+// setTab shows the tab at index i.
+func (a *App) setTab(i int) {
+	a.pos = i
+	a.tab = a.tabs[i].kind
+	if l := a.tabs[i].list; l != nil {
+		a.tasks = l
+	}
+	a.flash = ""
 }
 
 // signals are the tasks with a live agent tab or a linked open PR.
@@ -409,17 +452,17 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case "P":
 		a.openProfilePicker()
 		return nil
-	case "1", "2", "3", "4":
-		a.tab = Tab(k[0] - '1')
-		a.flash = ""
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		if i := int(k[0] - '1'); i < len(a.tabs) {
+			a.setTab(i)
+		}
 		return nil
 	case "tab", "shift+tab":
 		d := 1
 		if k == "shift+tab" {
 			d = -1
 		}
-		a.tab = Tab(cycle(int(a.tab), d, len(tabNames)))
-		a.flash = ""
+		a.setTab(cycle(a.pos, d, len(a.tabs)))
 		return nil
 	case "r":
 		a.flash = sFaint.Render("refreshing…")
@@ -706,9 +749,13 @@ func (a *App) bodyWidth() int {
 
 func (a *App) tabBar() string {
 	var parts []string
-	for i, n := range tabNames {
+	for i, e := range a.tabs {
+		n := tabNames[e.kind]
+		if e.list != nil {
+			n = e.list.title
+		}
 		label := fmt.Sprintf("%d %s", i+1, n)
-		if Tab(i) == a.tab {
+		if i == a.pos {
 			parts = append(parts, sTabOn.Render(label))
 		} else {
 			parts = append(parts, sFaint.Render(label))
