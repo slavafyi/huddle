@@ -1,5 +1,5 @@
-// Command huddle is a terminal UI for ClickUp tasks, GitHub PRs and coding
-// agents in Rex.
+// Command huddle is a terminal UI for ClickUp tasks, GitHub issues and PRs,
+// and coding agents in Rex.
 package main
 
 import (
@@ -82,6 +82,14 @@ func runProfile(cfg config.Config, p config.Profile, token string, runner run.Ru
 	}
 	state.Migrate()
 	pcfg := cfg.Use(p)
+	gh := &github.GH{Runner: runner, Orgs: p.GitHubOrgs, Exclude: cfg.OtherOrgs(p)}
+	if p.GitHubAccount != "" {
+		token, err := github.Token(ctx, runner, p.GitHubAccount)
+		if err != nil {
+			return "", err
+		}
+		gh.Token = token
+	}
 	var sources []task.Source
 	if p.ClickUp {
 		sources = append(sources, &clickup.Source{
@@ -92,13 +100,16 @@ func runProfile(cfg config.Config, p config.Profile, token string, runner run.Ru
 			InProgress: pcfg.StatusInProgress,
 		})
 	}
+	if p.IssuesOn() {
+		sources = append(sources, &github.Issues{GH: gh})
+	}
 	app := ui.NewApp(ui.Deps{
 		Config:    pcfg,
 		Profile:   p.Name,
 		Profiles:  cfg.Profiles,
 		Recent:    store.RecentProfiles(store.StateDir()),
 		Sources:   sources,
-		GitHub:    &github.GH{Runner: runner, Orgs: p.GitHubOrgs},
+		GitHub:    gh,
 		Rex:       &rex.CLI{Runner: runner},
 		Runner:    runner,
 		Cache:     cache,

@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/slavafyi/huddle/internal/task"
@@ -11,7 +12,13 @@ import (
 // todayView is the Today tab.
 type todayView struct {
 	list   list
-	counts [4]int
+	counts []groupCount
+}
+
+// groupCount is one Today group's size, for the summary line.
+type groupCount struct {
+	name string
+	n    int
 }
 
 func newTodayView() *todayView {
@@ -23,10 +30,11 @@ func newTodayView() *todayView {
 
 var todayNotes = map[string]string{"Waiting on others": "you are lead, task is with someone else"}
 
-func (v *todayView) rebuild(tasks []task.Task, rules map[string]task.Rules, now time.Time, agents agentLookup) {
+func (v *todayView) rebuild(tasks []task.Task, rules map[string]task.Rules, sig task.Signals, now time.Time, agents agentLookup) {
 	var secs []section
-	for i, g := range task.Today(tasks, rules, now) {
-		v.counts[i] = len(g.Tasks)
+	v.counts = nil
+	for _, g := range task.Today(tasks, rules, sig, now) {
+		v.counts = append(v.counts, groupCount{g.Name, len(g.Tasks)})
 		if len(g.Tasks) == 0 {
 			continue
 		}
@@ -34,9 +42,9 @@ func (v *todayView) rebuild(tasks []task.Task, rules map[string]task.Rules, now 
 		for _, t := range g.Tasks {
 			var when, state string
 			switch g.Name {
-			case "Waiting on others":
+			case task.GroupWaiting:
 				when = statusStyle(t.Status, false).Render(t.Status) // who has it: see the detail area
-			case "Done this week":
+			case task.GroupDone:
 				when = sFaint.Render(t.Done.In(now.Location()).Format("Jan 2"))
 				state = sGreen.Render("✓ " + t.Status)
 			default:
@@ -56,6 +64,13 @@ func (v *todayView) rebuild(tasks []task.Task, rules map[string]task.Rules, now 
 }
 
 func (v *todayView) subHeader(now time.Time) string {
-	return sFaint.Render(fmt.Sprintf("%s · %d in progress · %d up next · %d waiting · %d done this week",
-		now.Format("Mon, Jan 2"), v.counts[0], v.counts[1], v.counts[2], v.counts[3]))
+	parts := []string{now.Format("Mon, Jan 2")}
+	for _, c := range v.counts {
+		name := strings.ToLower(c.name)
+		if c.name == task.GroupWaiting {
+			name = "waiting"
+		}
+		parts = append(parts, fmt.Sprintf("%d %s", c.n, name))
+	}
+	return sFaint.Render(strings.Join(parts, " · "))
 }

@@ -7,6 +7,7 @@ import (
 	"context"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Task is one task from a source. Zero times mean "not set".
@@ -40,6 +41,17 @@ func (t Task) Ref() string { return Ref(t.Source, t.ID) }
 // KeyLower is Key in lowercase, for branch and folder names.
 func (t Task) KeyLower() string { return strings.ToLower(t.Key) }
 
+// FolderKey is KeyLower made safe for folder names: characters other than
+// letters, digits, '.', '_' and '-' become '-' (shop#42 → shop-42).
+func (t Task) FolderKey() string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '.' || r == '_' || r == '-' {
+			return r
+		}
+		return '-'
+	}, t.KeyLower())
+}
+
 // IsDone reports whether the task is closed or in a done status.
 func (t Task) IsDone() bool { return !t.Done.IsZero() }
 
@@ -61,7 +73,8 @@ type Status struct {
 	Done  bool // moving here closes the task
 }
 
-// Rules are a source's status words for grouping (SPEC §4.2, §4.4).
+// Rules are a source's status words and view settings (SPEC §4.2–§4.4).
+// Zero values give ClickUp's behavior.
 type Rules struct {
 	Active  []string // assigned to me: In progress
 	Next    []string // assigned to me: Up next
@@ -71,6 +84,28 @@ type Rules struct {
 	// starts on it.
 	Startable []string
 	MoveTo    string
+	// Groups are the Today groups this source uses. Nil: DefaultGroups.
+	Groups []string
+	// Classify puts an open task into one of Groups, or "" to leave it out
+	// of Today. Nil: by status (Active, Next, Waiting).
+	Classify func(t Task, s Signals) string
+	// FilterNames label the Tasks view's filters (all, assigned, lead).
+	// Zero: "Mine + Lead", "Assigned", "Lead only".
+	FilterNames [3]string
+	// RepoInList says the task's ListID is its GitHub repo (owner/repo), so
+	// the Start panel needs no repo picker.
+	RepoInList bool
+	// BranchTemplate and PromptTemplate replace the config's templates for
+	// this source when set.
+	BranchTemplate string
+	PromptTemplate string
+}
+
+// Signals are what huddle knows about tasks besides their source data,
+// keyed by Task.Ref.
+type Signals struct {
+	Live     map[string]bool // has a live agent tab
+	InReview map[string]bool // has a linked open PR
 }
 
 // Source is a task system huddle reads and writes. me is the source's own

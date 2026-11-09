@@ -40,10 +40,31 @@ type Profile struct {
 	ClickUpLead      string   `toml:"clickup_lead"`
 	GitHubAccount    string   `toml:"github_account"`
 	GitHubOrgs       []string `toml:"github_orgs"`
+	GitHubIssues     *bool    `toml:"github_issues"` // nil means on
 	// Overrides of the shared settings.
 	RepoRoots      []string `toml:"repo_roots"`
 	ScratchRoot    string   `toml:"scratch_root"`
 	PromptTemplate string   `toml:"prompt_template"`
+}
+
+// IssuesOn reports whether the profile shows GitHub issues: yes unless
+// github_issues = false.
+func (p Profile) IssuesOn() bool { return p.GitHubIssues == nil || *p.GitHubIssues }
+
+// OtherOrgs lists the GitHub orgs that other profiles claim. A profile
+// without github_orgs leaves them out of its searches; a profile with
+// github_orgs searches only those, so it gets none.
+func (c Config) OtherOrgs(p Profile) []string {
+	if len(p.GitHubOrgs) > 0 {
+		return nil
+	}
+	var out []string
+	for _, o := range c.Profiles {
+		if o.Name != p.Name {
+			out = append(out, o.GitHubOrgs...)
+		}
+	}
+	return out
 }
 
 // reserved are top-level tables that are shared settings, not profiles.

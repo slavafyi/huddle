@@ -212,3 +212,40 @@ func TestPrepareCheckoutAndScratch(t *testing.T) {
 		t.Error("scratch folder not created")
 	}
 }
+
+func TestExpandIssueVars(t *testing.T) {
+	v := Vars{ID: "shop#42", FullID: "acme/shop#42", Number: "42", Title: "Fix: checkout"}
+	if got := Expand("feature/{number}-{slug}", v); got != "feature/42-fix-checkout" {
+		t.Errorf("branch = %q", got)
+	}
+	if got := Expand("Take issue {full_id}", v); got != "Take issue acme/shop#42" {
+		t.Errorf("prompt = %q", got)
+	}
+}
+
+func TestScanReposReadsOrigin(t *testing.T) {
+	root := t.TempDir()
+	for name, cfg := range map[string]string{
+		"https":  "[core]\n\tbare = false\n[remote \"upstream\"]\n\turl = git@github.com:other/x.git\n[remote \"origin\"]\n\turl = https://github.com/Acme/Shop.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n",
+		"ssh":    "[remote \"origin\"]\n\turl = git@github.com:acme/lib.git\n",
+		"sshurl": "[remote \"origin\"]\n  url = ssh://git@github.com/acme/tool\n",
+		"none":   "[core]\n",
+	} {
+		os.MkdirAll(filepath.Join(root, name, ".git"), 0o755)
+		os.WriteFile(filepath.Join(root, name, ".git", "config"), []byte(cfg), 0o644)
+	}
+	got := map[string]string{}
+	for _, r := range ScanRepos([]string{root}) {
+		got[r.Name] = r.Remote
+	}
+	want := map[string]string{"https": "Acme/Shop", "ssh": "acme/lib", "sshurl": "acme/tool", "none": ""}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("remotes = %v, want %v", got, want)
+	}
+	if r, ok := FindRemote(ScanRepos([]string{root}), "acme/shop"); !ok || r.Name != "https" {
+		t.Errorf("find = %+v %v", r, ok)
+	}
+	if _, ok := FindRemote(ScanRepos([]string{root}), "acme/other"); ok {
+		t.Error("found a repo that is not there")
+	}
+}

@@ -51,6 +51,16 @@ Checked on 2026-11-09. They come from config or the API, not from code.
 Open tasks where I'm assignee **or** Lead Assignee, plus tasks closed in the
 last 7 days.
 
+**GitHub issues** (source `github`, on in every profile unless
+`github_issues = false`): open issues assigned to me or opened by me, plus
+those closed in the last 7 days, in the profile's org scope (§5). For
+GitHub, "lead" means **opened by me**. Shown as `repo#42` (internal ID
+`owner/repo#42`, unique ref `github:owner/repo#42`); the group column is the
+repo; priority from labels `priority:high` / `priority:urgent` (same `!` /
+`!!` marks); statuses `open` / `closed`. One `gh api graphql` search per
+refresh (first 100 per query); incremental refreshes use
+`updated:>=<since>`.
+
 ### 4.2 Today groups
 
 | Group | Rule |
@@ -61,14 +71,35 @@ last 7 days.
 | Done this week | closed in the last 7 days |
 
 The status words above are ClickUp's: each task source supplies its own
-(`task.Rules`), so groups work the same for any source.
+(`task.Rules`).
+
+GitHub issues use their own groups:
+
+| Group | Rule |
+| --- | --- |
+| In progress | has a live agent tab |
+| In review | has a linked open PR (§4.6) |
+| Open | assigned to me, or opened by me with nobody assigned |
+| Done this week | closed in the last 7 days |
+
+A profile with both sources shows the union of groups in this order: In
+progress, In review, Up next, Open, Waiting on others, Done this week. The
+summary line counts each shown group.
+
+**Tasks filters** (`t`): all, assigned to me, lead and not assigned to me.
+Labels: ClickUp "Mine + Lead / Assigned / Lead only"; GitHub "All /
+Assigned / Opened by me"; both sources "All / Assigned / Lead / opened".
 
 ### 4.3 Task actions
 
 - Change status (options from the API), comment, assign/unassign me, open in
   browser, copy branch name.
-- Writes show at once, then go to the task's source (ClickUp). On failure,
-  undo and show the error.
+- Writes show at once, then go to the task's source. On failure, undo and
+  show the error.
+- GitHub issues: status `closed` / `open` runs `gh issue close` /
+  `gh issue reopen`, comment `gh issue comment --body`, assign
+  `gh issue edit --add-assignee @me` (`--remove-assignee`), each with
+  `-R owner/repo`.
 
 ### 4.4 Start a task
 
@@ -87,6 +118,17 @@ Panel choices and defaults:
 - **Prompt:** empty means `Take a task {id} from CU`.
 - **Move to in progress** if the task is `to plan` / `to start`.
 - **Assign to me**: only shown when I'm not an assignee.
+
+GitHub issues: the repo is known, so there is no repo picker. huddle finds
+the local clone among `repo_roots` whose `origin` remote is the issue's
+`owner/repo` (https or ssh form; read from `.git/config` when the repo list
+is scanned). Without one the panel says `no local clone of owner/repo in
+repo_roots`, and worktree / checkout launches stop with that message
+(scratch still works). Branch `feature/{number}-{slug}`, prompt
+`Take issue {full_id}` (`{full_id}` = `owner/repo#42`), no "Move to" row,
+Rex session named after the repo. The `branch_template` and
+`prompt_template` settings apply to ClickUp tasks only. Folder names use the
+ID with unsafe characters as `-` (`shop#42` → `shop-42`).
 
 On launch, in this order (stop at the first error, no rollback):
 
@@ -117,7 +159,10 @@ My open PRs and review requests in the profile's `github_orgs` (all of
 GitHub when it has none), from `gh`. A PR's task is
 the first known task ID (from the cache, any case, whole word) in its branch
 name, else in its title. Also match ClickUp's own `CU-<clickup id>` form.
-No match → no task.
+GitHub issues link first by the PR's closing references
+(`closingIssuesReferences`, e.g. "Fixes #42"), else by the issue number as
+a branch word (`42` or `42-…`) when the PR is in the issue's repo. No
+match → no task.
 
 ### 4.7 Cache
 
@@ -148,11 +193,22 @@ go by status name; unknown names are green when done, else faint.
   clickup_workspace = "1234567"          # required with clickup for now (§14.4 step 4)
   clickup_lead      = "11111111-…"       # the "Lead Assignee" field
   github_account    = "slavafyi"         # optional
-  github_orgs       = ["vertexdigital"]  # PRs are searched in these orgs
+  github_orgs       = ["vertexdigital"]  # GitHub issues and PRs in these orgs
+  # github_issues   = false              # turn the GitHub issues source off
 
   [personal]
   github_account = "slavafyi"
   ```
+
+  **GitHub split:** a profile with `github_orgs` searches issues and PRs
+  only in those orgs (`org:X`); a profile without gets everything else
+  (`-org:X` for every org another profile claims).
+  **`github_account`:** huddle reads that account's token once at start
+  (`gh auth token --user NAME`; failure stops with a message) and passes it
+  as `GH_TOKEN` to its own `gh` calls only, so `gh auth switch` elsewhere
+  doesn't matter. Without it, gh's active account is used. The token is
+  never stored or logged.
+  **`github_issues`:** on unless set to `false`.
 
   A profile may override `repo_roots`, `scratch_root` and
   `prompt_template`. Unknown settings, no profiles, a profile name other
@@ -197,7 +253,7 @@ go vet ./... && gofmt -l .   # must be clean / print nothing
 cmd/huddle/          main
 internal/task/       source-neutral task, Source interface, rules (§4.1–4.2)
 internal/clickup/    API client + ClickUp as a task Source
-internal/github/     gh calls + PR → task link
+internal/github/     gh calls, PR → task link, issues source
 internal/rex/        rex calls + events
 internal/workspace/  repos, branch names, worktree/scratch
 internal/store/      cache + state files
@@ -263,7 +319,7 @@ Live checks (read-only, or throwaway Rex sessions) run with
 Focusing a tab in the Mac app uses the `session.select` client action, so
 Rex **Remote Control** must be on. If it's off, show a hint.
 
-## 14. Next: profiles and GitHub issues (planned; profiles built)
+## 14. Next: profiles and GitHub issues (planned; steps 1–3 built)
 
 Decided 2026-11-10.
 
@@ -313,6 +369,8 @@ github_account = "slavafyi"
 
 ### 14.3 GitHub issues in the views
 
+Built: see §4.1–§4.6 (decided details there override this sketch).
+
 - ID `repo#42`; the group column is the repo; priority from labels
   (`priority:high`, `priority:urgent`) with the same `!` / `!!` marks.
 - Today: **In progress** (has an agent tab or my open PR), **Open**,
@@ -329,6 +387,7 @@ github_account = "slavafyi"
    visible change; existing tests stay green). Tasks and agent records are
    keyed by source + ID (state file version 2; older agents are ClickUp).
 2. **Built.** Profiles in config, header, picker, `-p`; per-profile cache
-   and state (§5). `github_account` is read but not used yet (step 3).
-3. GitHub issues source.
+   and state (§5). `github_account` is used from step 3.
+3. **Built.** GitHub issues source, `github_account` token and org split
+   for issues and PRs (§4.1–§4.6, §5). Cache version 3.
 4. ClickUp auto-detect for workspace and lead field.

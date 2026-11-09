@@ -12,6 +12,7 @@ import (
 type taskView struct {
 	list   list
 	filter task.TaskFilter
+	names  [3]string // filter labels, from the sources' rules
 }
 
 func newTaskView() *taskView {
@@ -50,7 +51,7 @@ func (v *taskView) subHeader(tasks []task.Task) string {
 	var parts []string
 	open := openTasks(tasks)
 	for f := task.FilterAll; f <= task.FilterLeadOnly; f++ {
-		label := fmt.Sprintf("%s %d", f, len(task.Filter(open, f)))
+		label := fmt.Sprintf("%s %d", v.names[f], len(task.Filter(open, f)))
 		if f == v.filter {
 			parts = append(parts, sTabOn.Render(label))
 		} else {

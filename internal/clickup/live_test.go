@@ -41,7 +41,7 @@ func TestLiveReadOnly(t *testing.T) {
 		}
 	}
 	t.Logf("me=%d tasks=%d leadOnly=%d done=%d withType=%d", me, len(tasks), leadOnly, done, typed)
-	for _, g := range task.Today(tasks, map[string]task.Rules{SourceName: src.Rules()}, now) {
+	for _, g := range task.Today(tasks, map[string]task.Rules{SourceName: src.Rules()}, task.Signals{}, now) {
 		t.Logf("  %s: %d", g.Name, len(g.Tasks))
 	}
 	if len(tasks) == 0 {

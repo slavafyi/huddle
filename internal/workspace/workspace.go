@@ -45,8 +45,9 @@ func ParseKind(id string) (Kind, bool) {
 
 // Repo is a local git repo.
 type Repo struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Remote string `json:"remote,omitempty"` // origin on GitHub as owner/repo, if any
 }
 
 const (
@@ -95,16 +96,21 @@ func Slug(title string) string {
 
 // Vars are the values a template can use.
 type Vars struct {
-	ID    string // task ID as shown, e.g. DEV-7700
-	Title string
-	URL   string
+	ID     string // task ID as shown, e.g. DEV-7700 or shop#42
+	FullID string // the source's own ID, e.g. acme/shop#42
+	Number string // GitHub issue number, e.g. 42
+	Title  string
+	URL    string
 }
 
-// Expand fills {id}, {id_lower}, {slug}, {title} and {url} in tmpl.
+// Expand fills {id}, {id_lower}, {full_id}, {number}, {slug}, {title} and
+// {url} in tmpl.
 func Expand(tmpl string, v Vars) string {
 	return strings.NewReplacer(
 		"{id_lower}", strings.ToLower(v.ID),
 		"{id}", v.ID,
+		"{full_id}", v.FullID,
+		"{number}", v.Number,
 		"{slug}", Slug(v.Title),
 		"{title}", v.Title,
 		"{url}", v.URL,
@@ -112,7 +118,7 @@ func Expand(tmpl string, v Vars) string {
 }
 
 // ScanRepos lists folders directly under roots that contain .git, sorted by
-// name. Missing roots are skipped.
+// name, with their GitHub origin. Missing roots are skipped.
 func ScanRepos(roots []string) []Repo {
 	var out []Repo
 	for _, root := range roots {
@@ -126,12 +132,56 @@ func ScanRepos(roots []string) []Repo {
 			}
 			p := filepath.Join(root, e.Name())
 			if _, err := os.Stat(filepath.Join(p, ".git")); err == nil {
-				out = append(out, Repo{Name: e.Name(), Path: p})
+				out = append(out, Repo{Name: e.Name(), Path: p, Remote: origin(filepath.Join(p, ".git", "config"))})
 			}
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// origin reads the origin remote of a git config file as owner/repo. It
+// is "" when the file can't be read (a worktree's .git is a file) or the
+// remote is not on GitHub.
+func origin(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	in := false
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			in = line == `[remote "origin"]`
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if in && ok && strings.TrimSpace(k) == "url" {
+			return githubRepo(strings.TrimSpace(v))
+		}
+	}
+	return ""
+}
+
+// githubRepo turns a GitHub remote URL (https, ssh or scp form) into
+// owner/repo, or "" for other hosts.
+func githubRepo(url string) string {
+	for _, p := range []string{"https://github.com/", "http://github.com/", "ssh://git@github.com/", "git@github.com:"} {
+		if rest, ok := strings.CutPrefix(url, p); ok {
+			return strings.TrimSuffix(strings.TrimSuffix(rest, "/"), ".git")
+		}
+	}
+	return ""
+}
+
+// FindRemote returns the repo whose origin is owner/repo (any case).
+func FindRemote(repos []Repo, ownerRepo string) (Repo, bool) {
+	for _, r := range repos {
+		if r.Remote != "" && strings.EqualFold(r.Remote, ownerRepo) {
+			return r, true
+		}
+	}
+	return Repo{}, false
 }
 
 // RankRepos orders repos for a client: recently used ones first (in the

@@ -26,34 +26,95 @@ func Relevant(t Task, now time.Time) bool {
 	return !t.IsDone() || now.Sub(t.Done) <= DoneWindow
 }
 
+// Today group names.
+const (
+	GroupInProgress = "In progress"
+	GroupInReview   = "In review"
+	GroupUpNext     = "Up next"
+	GroupOpen       = "Open"
+	GroupWaiting    = "Waiting on others"
+	GroupDone       = "Done this week"
+)
+
+// DefaultGroups are the Today groups of a source whose Rules set none.
+var DefaultGroups = []string{GroupInProgress, GroupUpNext, GroupWaiting, GroupDone}
+
+// groupOrder is the order of Today groups when sources are mixed.
+var groupOrder = []string{GroupInProgress, GroupInReview, GroupUpNext, GroupOpen, GroupWaiting, GroupDone}
+
+// byStatus is the default Classify: ClickUp's status rules.
+func byStatus(r Rules, t Task) string {
+	switch {
+	case t.Mine && slices.Contains(r.Active, t.Status):
+		return GroupInProgress
+	case t.Mine && slices.Contains(r.Next, t.Status):
+		return GroupUpNext
+	case t.Lead && !t.Mine && slices.Contains(r.Waiting, t.Status):
+		return GroupWaiting
+	}
+	return ""
+}
+
 // Today groups tasks for the Today view, using each task's source rules.
-func Today(tasks []Task, rules map[string]Rules, now time.Time) []Group {
-	var g [4][]Task
-	for _, t := range tasks {
-		r := rules[t.Source]
-		switch {
-		case t.IsDone():
-			if now.Sub(t.Done) <= DoneWindow {
-				g[3] = append(g[3], t)
+// It returns the groups of every source in rules (empty ones too), in
+// groupOrder.
+func Today(tasks []Task, rules map[string]Rules, s Signals, now time.Time) []Group {
+	var names []string
+	for _, r := range rules {
+		gs := r.Groups
+		if gs == nil {
+			gs = DefaultGroups
+		}
+		for _, n := range gs {
+			if !slices.Contains(names, n) {
+				names = append(names, n)
 			}
-		case t.Mine && slices.Contains(r.Active, t.Status):
-			g[0] = append(g[0], t)
-		case t.Mine && slices.Contains(r.Next, t.Status):
-			g[1] = append(g[1], t)
-		case t.Lead && !t.Mine && slices.Contains(r.Waiting, t.Status):
-			g[2] = append(g[2], t)
 		}
 	}
-	sortBy(g[0], byDue)
-	sortBy(g[1], byDue)
-	sortBy(g[2], func(a, b Task) bool { return a.Updated.After(b.Updated) })
-	sortBy(g[3], func(a, b Task) bool { return a.Done.After(b.Done) })
-	return []Group{
-		{"In progress", g[0]},
-		{"Up next", g[1]},
-		{"Waiting on others", g[2]},
-		{"Done this week", g[3]},
+	if len(names) == 0 {
+		names = DefaultGroups
 	}
+	rank := func(n string) int {
+		if i := slices.Index(groupOrder, n); i >= 0 {
+			return i
+		}
+		return len(groupOrder)
+	}
+	sort.SliceStable(names, func(i, j int) bool { return rank(names[i]) < rank(names[j]) })
+	groups := make([]Group, len(names))
+	for i, n := range names {
+		groups[i].Name = n
+	}
+	add := func(name string, t Task) {
+		if i := slices.Index(names, name); i >= 0 {
+			groups[i].Tasks = append(groups[i].Tasks, t)
+		}
+	}
+	for _, t := range tasks {
+		if t.IsDone() {
+			if now.Sub(t.Done) <= DoneWindow {
+				add(GroupDone, t)
+			}
+			continue
+		}
+		r := rules[t.Source]
+		if r.Classify != nil {
+			add(r.Classify(t, s), t)
+		} else {
+			add(byStatus(r, t), t)
+		}
+	}
+	for _, g := range groups {
+		switch g.Name {
+		case GroupInProgress, GroupUpNext:
+			sortBy(g.Tasks, byDue)
+		case GroupDone:
+			sortBy(g.Tasks, func(a, b Task) bool { return a.Done.After(b.Done) })
+		default:
+			sortBy(g.Tasks, func(a, b Task) bool { return a.Updated.After(b.Updated) })
+		}
+	}
+	return groups
 }
 
 // ByStatus groups tasks by status in workflow order (the status order
@@ -92,6 +153,29 @@ const (
 // String names the filter for the UI.
 func (f TaskFilter) String() string {
 	return [...]string{"Mine + Lead", "Assigned", "Lead only"}[f]
+}
+
+// FilterNames labels the Tasks view's filters for the sources in rules:
+// their own labels when they agree, else neutral ones.
+func FilterNames(rules map[string]Rules) [3]string {
+	def := [3]string{FilterAll.String(), FilterAssigned.String(), FilterLeadOnly.String()}
+	var out [3]string
+	for _, r := range rules {
+		n := r.FilterNames
+		if n == ([3]string{}) {
+			n = def
+		}
+		switch {
+		case out == ([3]string{}):
+			out = n
+		case out != n:
+			return [3]string{"All", "Assigned", "Lead / opened"}
+		}
+	}
+	if out == ([3]string{}) {
+		return def
+	}
+	return out
 }
 
 // Filter applies f to tasks.

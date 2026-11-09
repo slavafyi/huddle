@@ -151,6 +151,7 @@ func NewApp(d Deps) *App {
 	for _, s := range d.Sources {
 		a.rules[s.Name()] = s.Rules()
 	}
+	a.tasks.names = task.FilterNames(a.rules)
 	if len(d.Sources) == 0 {
 		a.today.list.empty = "no sources in this profile"
 		a.tasks.list.empty = "no sources in this profile"
@@ -172,9 +173,25 @@ func (a *App) rebuild() {
 	now := a.now()
 	l := a.lookup()
 	a.tasks.rebuild(a.cache.Tasks, now, l)
-	a.today.rebuild(a.cache.Tasks, a.rules, now, l)
+	a.today.rebuild(a.cache.Tasks, a.rules, a.signals(l), now, l)
 	a.agents.rebuild(a.state.Agents, a.agentInfo, now)
 	a.prs.rebuild(a.cache.PRs, a.cache.Tasks, now)
+}
+
+// signals are the tasks with a live agent tab or a linked open PR.
+func (a *App) signals(l agentLookup) task.Signals {
+	s := task.Signals{Live: map[string]bool{}, InReview: map[string]bool{}}
+	for ref, i := range l.byTask {
+		if rank(i) > 0 {
+			s.Live[ref] = true
+		}
+	}
+	for _, t := range a.cache.Tasks {
+		if _, ok := a.taskPR(t); ok {
+			s.InReview[t.Ref()] = true
+		}
+	}
+	return s
 }
 
 // Init loads tasks and starts the refresh timer.

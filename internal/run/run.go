@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ type Cmd struct {
 	Name string
 	Args []string
 	Dir  string
+	Env  []string // extra KEY=VALUE pairs on top of huddle's environment
 }
 
 // String joins the name and arguments with spaces. It is for matching in
@@ -37,6 +39,9 @@ type Exec struct{}
 func (Exec) Run(ctx context.Context, c Cmd) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, c.Name, c.Args...)
 	cmd.Dir = c.Dir
+	if len(c.Env) > 0 {
+		cmd.Env = append(os.Environ(), c.Env...)
+	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()

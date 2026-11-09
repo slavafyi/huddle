@@ -212,3 +212,33 @@ func TestTokenMissing(t *testing.T) {
 		t.Fatal("want error")
 	}
 }
+
+func TestGitHubIssuesOnUnlessOptedOut(t *testing.T) {
+	c, err := Load(write(t, `
+[work]
+github_orgs = ["acme"]
+github_issues = false
+
+[personal]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Profiles[0].IssuesOn() || !c.Profiles[1].IssuesOn() {
+		t.Errorf("issues on: work %v personal %v", c.Profiles[0].IssuesOn(), c.Profiles[1].IssuesOn())
+	}
+}
+
+func TestOtherOrgs(t *testing.T) {
+	c := Config{Profiles: []Profile{
+		{Name: "work", GitHubOrgs: []string{"acme", "beta"}},
+		{Name: "oss", GitHubOrgs: []string{"gamma"}},
+		{Name: "personal"},
+	}}
+	if got := c.OtherOrgs(c.Profiles[2]); !reflect.DeepEqual(got, []string{"acme", "beta", "gamma"}) {
+		t.Errorf("personal excludes %v", got)
+	}
+	if got := c.OtherOrgs(c.Profiles[0]); len(got) != 0 {
+		t.Errorf("a profile with orgs excludes nothing: %v", got)
+	}
+}

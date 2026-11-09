@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"os"
@@ -44,6 +45,8 @@ type startPanel struct {
 	field      field
 	kind       workspace.Kind
 	repos      []workspace.Repo // ranked
+	fixedRepo  bool             // the task names its repo: no picker
+	noClone    string           // why there is no repo, when fixed
 	repoFilter string
 	repoIdx    int
 	branch     string
@@ -135,13 +138,23 @@ func (a *App) onEnter(m enterMsg) tea.Cmd {
 }
 
 func (a *App) openStart(t task.Task) {
-	cfg := a.deps.Config
+	cfg, r := a.deps.Config, a.rules[t.Source]
+	v := templateVars(t)
 	p := &startPanel{
 		task:   t,
-		repos:  workspace.RankRepos(a.cache.Repos, t.Project, a.state.RecentRepos[t.Project]),
-		branch: workspace.Expand(cfg.BranchTemplate, workspace.Vars{ID: t.Key, Title: t.Name, URL: t.URL}),
+		branch: workspace.Expand(cmp.Or(r.BranchTemplate, cfg.BranchTemplate), v),
 		agents: cfg.AgentNames(),
-		prompt: workspace.Expand(cfg.PromptTemplate, workspace.Vars{ID: t.Key, Title: t.Name, URL: t.URL}),
+		prompt: workspace.Expand(cmp.Or(r.PromptTemplate, cfg.PromptTemplate), v),
+	}
+	if r.RepoInList {
+		p.fixedRepo = true
+		if repo, ok := workspace.FindRemote(a.cache.Repos, t.ListID); ok {
+			p.repos = []workspace.Repo{repo}
+		} else {
+			p.noClone = "no local clone of " + t.ListID + " in repo_roots"
+		}
+	} else {
+		p.repos = workspace.RankRepos(a.cache.Repos, t.Project, a.state.RecentRepos[t.Project])
 	}
 	if task.WantsScratch(t, cfg.ScratchTypes, cfg.ScratchPrefixes) {
 		p.kind = workspace.Scratch
@@ -155,6 +168,12 @@ func (a *App) openStart(t task.Task) {
 	p.session = a.state.ClientSessions[t.Project]
 	a.start = p
 	a.mode = modeStart
+}
+
+// templateVars are a task's values for the branch and prompt templates.
+func templateVars(t task.Task) workspace.Vars {
+	_, num, _ := strings.Cut(t.ID, "#")
+	return workspace.Vars{ID: t.Key, FullID: t.ID, Number: num, Title: t.Name, URL: t.URL}
 }
 
 // filtered returns the repos matching the filter.
@@ -174,7 +193,7 @@ func (p *startPanel) repo() (workspace.Repo, bool) {
 // fields lists the fields shown for the current choices.
 func (p *startPanel) fields() []field {
 	fs := []field{fWorkspace}
-	if p.kind != workspace.Scratch {
+	if p.kind != workspace.Scratch && !p.fixedRepo {
 		fs = append(fs, fRepo)
 	}
 	if p.kind == workspace.Worktree {
@@ -300,13 +319,13 @@ func dropLast(s string) string {
 func (a *App) plan() (launch.Plan, string) {
 	p, cfg, t := a.start, a.deps.Config, a.start.task
 	wp := workspace.Plan{
-		Kind: p.kind, Branch: strings.TrimSpace(p.branch), TaskKey: t.KeyLower(), Slug: workspace.Slug(t.Name),
+		Kind: p.kind, Branch: strings.TrimSpace(p.branch), TaskKey: t.FolderKey(), Slug: workspace.Slug(t.Name),
 		WorktreeRoot: cfg.WorktreeRoot, ScratchRoot: cfg.ScratchRoot,
 	}
 	if p.kind != workspace.Scratch {
 		r, ok := p.repo()
 		if !ok {
-			return launch.Plan{}, "pick a repo"
+			return launch.Plan{}, cmp.Or(p.noClone, "pick a repo")
 		}
 		wp.Repo, wp.BaseBranch = r, cfg.BaseBranch(r.Name)
 		if p.kind == workspace.Worktree && wp.Branch == "" {
@@ -315,7 +334,7 @@ func (a *App) plan() (launch.Plan, string) {
 	}
 	prompt := strings.TrimSpace(p.prompt)
 	if prompt == "" {
-		prompt = workspace.Expand(cfg.PromptTemplate, workspace.Vars{ID: t.Key, Title: t.Name, URL: t.URL})
+		prompt = workspace.Expand(cmp.Or(a.rules[t.Source].PromptTemplate, cfg.PromptTemplate), templateVars(t))
 	}
 	agent := p.agents[p.agentIdx]
 	lp := launch.Plan{
@@ -462,7 +481,15 @@ func (a *App) renderStart(height int) []string {
 		label(fWorkspace, "Workspace"),
 		"  " + opt(p.kind == workspace.Worktree, "worktree") + "  " + opt(p.kind == workspace.Checkout, "checkout") + "  " + opt(p.kind == workspace.Scratch, "scratch"),
 	}
-	if p.kind != workspace.Scratch {
+	if p.kind != workspace.Scratch && p.fixedRepo {
+		lines = append(lines, sFaint.Render("  Repo"))
+		if r, ok := p.repo(); ok {
+			lines = append(lines, "  "+r.Name)
+		} else {
+			lines = append(lines, sRed.Render("  "+p.noClone))
+		}
+	}
+	if p.kind != workspace.Scratch && !p.fixedRepo {
 		head := "Repo"
 		if p.repoFilter != "" {
 			head = `Repo · "` + p.repoFilter + `"` + caret(fRepo)
@@ -489,7 +516,7 @@ func (a *App) renderStart(height int) []string {
 		lines = append(lines, label(fBranch, "Branch"), "  "+p.branch+caret(fBranch))
 	}
 	if p.kind == workspace.Scratch {
-		dir := workspace.Plan{Kind: workspace.Scratch, ScratchRoot: a.deps.Config.ScratchRoot, TaskKey: t.KeyLower(), Slug: workspace.Slug(t.Name)}.Dir()
+		dir := workspace.Plan{Kind: workspace.Scratch, ScratchRoot: a.deps.Config.ScratchRoot, TaskKey: t.FolderKey(), Slug: workspace.Slug(t.Name)}.Dir()
 		parent := shortHome(filepath.Dir(dir)) + "/"
 		if w := ansi.StringWidth(parent); w > inner-2 {
 			parent = "…" + ansi.TruncateLeft(parent, w-(inner-3), "")

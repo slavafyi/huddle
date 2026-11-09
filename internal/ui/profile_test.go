@@ -124,3 +124,21 @@ func TestNoSourcesMessage(t *testing.T) {
 		}
 	}
 }
+
+func TestProfilePickerFitsAt80Columns(t *testing.T) {
+	e := withProfiles(t)
+	e.app.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	e.press("P")
+	var line string
+	for _, l := range strings.Split(plain(e), "\n") {
+		if strings.Contains(l, "● 1 work") {
+			line = l
+		}
+	}
+	if !strings.Contains(line, "ClickUp · vertexdigital") || strings.Contains(line, "…") {
+		t.Errorf("current profile line cut or unmarked: %q\n%s", line, plain(e))
+	}
+	if strings.Contains(plain(e), "● 2 personal") {
+		t.Error("only the current profile is marked")
+	}
+}

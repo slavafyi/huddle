@@ -1,11 +1,13 @@
-// Package github reads pull requests through the gh CLI and links them to
-// ClickUp tasks.
+// Package github reads pull requests and issues through the gh CLI, links
+// PRs to tasks, and is the GitHub issues task source.
 package github
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -41,6 +43,7 @@ type PR struct {
 	CI       string    `json:"ci,omitempty"`     // SUCCESS, FAILURE, ERROR, PENDING, EXPECTED or ""
 	Review   string    `json:"review,omitempty"` // APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED or ""
 	Kind     Kind      `json:"kind"`
+	Closes   []string  `json:"closes,omitempty"` // issues it closes, lowercase "owner/repo#42"
 }
 
 // Client is what huddle needs from GitHub.
@@ -48,10 +51,75 @@ type Client interface {
 	PRs(ctx context.Context, now time.Time) ([]PR, error)
 }
 
-// GH implements Client with `gh api graphql`. It only reads.
+// GH runs gh for one profile. Its PRs only read.
 type GH struct {
 	Runner run.Runner
-	Orgs   []string // none searches everywhere
+	Orgs   []string // search only these orgs; none: everywhere but Exclude
+	// Exclude are orgs other profiles claim, left out when Orgs is empty.
+	Exclude []string
+	// Token is the profile account's token, given to every gh command as
+	// GH_TOKEN. Empty: gh's active account.
+	Token string
+}
+
+// cmd is a gh command with the profile's token.
+func (g *GH) cmd(args ...string) run.Cmd {
+	c := run.Cmd{Name: "gh", Args: args}
+	if g.Token != "" {
+		c.Env = []string{"GH_TOKEN=" + g.Token}
+	}
+	return c
+}
+
+// scope is the search filter for the profile's orgs, with a leading space.
+func (g *GH) scope() string {
+	s := ""
+	for _, o := range g.Orgs {
+		s += " org:" + o
+	}
+	if len(g.Orgs) == 0 {
+		for _, o := range g.Exclude {
+			s += " -org:" + o
+		}
+	}
+	return s
+}
+
+// graphql runs a query and decodes its data into v.
+func (g *GH) graphql(ctx context.Context, v any, args ...string) error {
+	out, err := g.Runner.Run(ctx, g.cmd(append([]string{"api", "graphql"}, args...)...))
+	if err != nil {
+		return err
+	}
+	var r struct {
+		Data   json.RawMessage `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		return err
+	}
+	if len(r.Errors) > 0 {
+		return errors.New("github: " + r.Errors[0].Message)
+	}
+	if len(r.Data) == 0 {
+		return errors.New("github: empty reply")
+	}
+	return json.Unmarshal(r.Data, v)
+}
+
+// Token returns the gh token of account, for GH.Token. It is never logged.
+func Token(ctx context.Context, r run.Runner, account string) (string, error) {
+	out, err := r.Run(ctx, run.Cmd{Name: "gh", Args: []string{"auth", "token", "--user", account}})
+	tok := strings.TrimSpace(string(out))
+	if err == nil && tok == "" {
+		err = errors.New("empty token")
+	}
+	if err != nil {
+		return "", fmt.Errorf("no gh token for github_account %q (log in with gh auth login): %w", account, err)
+	}
+	return tok, nil
 }
 
 const query = `query($mine: String!, $review: String!, $merged: String!) {
@@ -65,6 +133,7 @@ fragment pr on PullRequest {
   repository { nameWithOwner name }
   reviewDecision
   commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+  closingIssuesReferences(first: 10) { nodes { number repository { nameWithOwner } } }
 }`
 
 type node struct {
@@ -91,45 +160,38 @@ type node struct {
 			} `json:"commit"`
 		} `json:"nodes"`
 	} `json:"commits"`
+	Closing struct {
+		Nodes []struct {
+			Number     int `json:"number"`
+			Repository struct {
+				NameWithOwner string `json:"nameWithOwner"`
+			} `json:"repository"`
+		} `json:"nodes"`
+	} `json:"closingIssuesReferences"`
 }
 
 // PRs returns my open PRs, PRs waiting for my review, and my PRs merged in
 // the last 30 days.
 func (g *GH) PRs(ctx context.Context, now time.Time) ([]PR, error) {
-	scope := ""
-	for _, o := range g.Orgs {
-		scope += " org:" + o
+	scope := g.scope()
+	var data map[string]struct {
+		Nodes []node `json:"nodes"`
 	}
-	args := []string{"api", "graphql",
-		"-f", "query=" + query,
-		"-f", "mine=is:pr is:open author:@me archived:false" + scope,
-		"-f", "review=is:pr is:open review-requested:@me archived:false" + scope,
-		"-f", "merged=is:pr is:merged author:@me merged:>=" + now.Add(-mergedWindow).Format("2006-01-02") + scope,
-	}
-	out, err := g.Runner.Run(ctx, run.Cmd{Name: "gh", Args: args})
+	err := g.graphql(ctx, &data,
+		"-f", "query="+query,
+		"-f", "mine=is:pr is:open author:@me archived:false"+scope,
+		"-f", "review=is:pr is:open review-requested:@me archived:false"+scope,
+		"-f", "merged=is:pr is:merged author:@me merged:>="+now.Add(-mergedWindow).Format("2006-01-02")+scope,
+	)
 	if err != nil {
 		return nil, err
-	}
-	var r struct {
-		Data map[string]struct {
-			Nodes []node `json:"nodes"`
-		} `json:"data"`
-		Errors []struct {
-			Message string `json:"message"`
-		} `json:"errors"`
-	}
-	if err := json.Unmarshal(out, &r); err != nil {
-		return nil, err
-	}
-	if len(r.Errors) > 0 {
-		return nil, errors.New("github: " + r.Errors[0].Message)
 	}
 	var prs []PR
 	for _, k := range []struct {
 		key  string
 		kind Kind
 	}{{"mine", Mine}, {"review", ReviewRequested}, {"merged", Merged}} {
-		for _, n := range r.Data[k.key].Nodes {
+		for _, n := range data[k.key].Nodes {
 			if n.Number == 0 {
 				continue // not a pull request
 			}
@@ -144,27 +206,51 @@ func (g *GH) PRs(ctx context.Context, now time.Time) ([]PR, error) {
 			if c := n.Commits.Nodes; len(c) > 0 && c[0].Commit.Rollup != nil {
 				p.CI = c[0].Commit.Rollup.State
 			}
+			for _, c := range n.Closing.Nodes {
+				p.Closes = append(p.Closes, strings.ToLower(c.Repository.NameWithOwner+"#"+strconv.Itoa(c.Number)))
+			}
 			prs = append(prs, p)
 		}
 	}
 	return prs, nil
 }
 
-// LinkTask returns the task a PR belongs to: the first task with a link
-// word (task.Task.Links) that appears as a whole word in the branch name,
-// else in the title.
+// LinkTask returns the task a PR belongs to: a GitHub issue the PR closes;
+// else the first task with a link word (task.Task.Links) that appears as a
+// whole word in the branch name, else in the title; else a GitHub issue of
+// the PR's repo whose number is a branch word ("42" or "42-…").
 func LinkTask(p PR, tasks []task.Task) (task.Task, bool) {
-	for _, text := range []string{p.Branch, p.Title} {
-		words := strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+	for _, c := range p.Closes {
+		for _, t := range tasks {
+			if t.Source == IssuesSource && strings.EqualFold(t.ID, c) {
+				return t, true
+			}
+		}
+	}
+	split := func(text string) []string {
+		return strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
 			return !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-')
 		})
-		for _, w := range words {
+	}
+	match := func(w, key string) bool { return w == key || strings.HasPrefix(w, key+"-") }
+	for _, text := range []string{p.Branch, p.Title} {
+		for _, w := range split(text) {
 			for _, t := range tasks {
 				for _, key := range t.Links {
-					if w == key || strings.HasPrefix(w, key+"-") {
+					if match(w, key) {
 						return t, true
 					}
 				}
+			}
+		}
+	}
+	for _, w := range split(p.Branch) {
+		for _, t := range tasks {
+			if t.Source != IssuesSource || !strings.EqualFold(t.ListID, p.Repo) {
+				continue
+			}
+			if _, num, ok := strings.Cut(t.ID, "#"); ok && match(w, num) {
+				return t, true
 			}
 		}
 	}

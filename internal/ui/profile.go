@@ -114,10 +114,11 @@ func (a *App) renderProfilePicker() []string {
 		if i == p.cursor {
 			mark = "› "
 		}
-		line := fmt.Sprintf("%s%d %-12s ", mark, i+1, pr.Name) + sFaint.Render(pr.Summary())
+		cur := "  "
 		if pr.Name == a.deps.Profile {
-			line += sFaint.Render(" (current)")
+			cur = sGreen.Render("●") + " "
 		}
+		line := mark + cur + fmt.Sprintf("%d %-12s ", i+1, pr.Name) + sFaint.Render(pr.Summary())
 		if i == p.cursor {
 			line = sBold.Render(line)
 		}
