@@ -9,8 +9,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/slavafyi/cuddle/internal/clickup"
 	"github.com/slavafyi/cuddle/internal/config"
 	"github.com/slavafyi/cuddle/internal/run"
+	"github.com/slavafyi/cuddle/internal/store"
 	"github.com/slavafyi/cuddle/internal/ui"
 )
 
@@ -29,9 +31,26 @@ func runApp() error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
-	if _, err := config.Token(context.Background(), run.Exec{}); err != nil {
+	runner := run.Exec{}
+	token, err := config.Token(context.Background(), runner)
+	if err != nil {
 		return err
 	}
-	_, err = tea.NewProgram(ui.NewApp(ui.Deps{})).Run()
+	var cache store.Cache
+	if err := store.Load(store.CachePath(), &cache); err != nil || cache.Version != store.CacheVersion {
+		cache = store.Cache{} // unreadable or old cache: start fresh
+	}
+	deps := ui.Deps{
+		Config: cfg,
+		ClickUp: &clickup.HTTP{
+			BaseURL: clickup.DefaultBaseURL, Token: token,
+			TeamID: cfg.WorkspaceID, LeadFieldID: cfg.LeadFieldID,
+		},
+		Runner:    runner,
+		Cache:     cache,
+		CachePath: store.CachePath(),
+		StatePath: store.StatePath(),
+	}
+	_, err = tea.NewProgram(ui.NewApp(deps)).Run()
 	return err
 }
