@@ -46,23 +46,51 @@ func (f *fakeClickUp) MyTasks(_ context.Context, _ int64, since, _ time.Time) ([
 func (f *fakeClickUp) Statuses(context.Context, string) ([]clickup.Status, error) {
 	return f.statuses, f.err
 }
-func (f *fakeClickUp) record(s string) error {
+func (f *fakeClickUp) record(s string, change func(*clickup.Task), id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.writes = append(f.writes, s)
-	return f.writeErr
+	if f.writeErr != nil {
+		return f.writeErr
+	}
+	// Like the real API, later reads see successful writes.
+	for i := range f.tasks {
+		if f.tasks[i].ID == id && change != nil {
+			change(&f.tasks[i])
+		}
+	}
+	return nil
 }
 func (f *fakeClickUp) SetStatus(_ context.Context, id, st string) error {
-	return f.record("status " + id + " " + st)
+	return f.record("status "+id+" "+st, func(t *clickup.Task) {
+		t.Status = st
+		for _, s := range f.statuses {
+			if s.Name == st {
+				t.StatusType, t.StatusOrder = s.Type, s.Order
+			}
+		}
+	}, id)
 }
 func (f *fakeClickUp) AddComment(_ context.Context, id, text string) error {
-	return f.record("comment " + id + " " + text)
+	return f.record("comment "+id+" "+text, nil, id)
 }
 func (f *fakeClickUp) SetAssignee(_ context.Context, id string, u int64, add bool) error {
-	if add {
-		return f.record("assign " + id)
+	change := func(t *clickup.Task) {
+		var rest []clickup.User
+		for _, a := range t.Assignees {
+			if a.ID != u {
+				rest = append(rest, a)
+			}
+		}
+		if add {
+			rest = append(rest, me)
+		}
+		t.Assignees = rest
 	}
-	return f.record("unassign " + id)
+	if add {
+		return f.record("assign "+id, change, id)
+	}
+	return f.record("unassign "+id, change, id)
 }
 
 var errOffline = errors.New("dial tcp: no network")
@@ -168,14 +196,15 @@ func (e *testEnv) cacheOnDisk(t *testing.T) store.Cache {
 }
 
 type fakeRex struct {
-	mu       sync.Mutex
-	sessions map[string]string
-	blocks   map[string]bool
-	statuses map[string]rex.Status
-	lines    map[string]string
-	calls    []string
-	focusErr error
-	next     int
+	mu        sync.Mutex
+	sessions  map[string]string
+	blocks    map[string]bool
+	statuses  map[string]rex.Status
+	lines     map[string]string
+	calls     []string
+	focusErr  error
+	blocksErr error
+	next      int
 }
 
 func (f *fakeRex) log(s string) {
@@ -208,7 +237,14 @@ func (f *fakeRex) NewWindow(_ context.Context, s, name, dir string, argv []strin
 	f.blocks[p.BlockID] = true
 	return p, nil
 }
-func (f *fakeRex) Blocks(_ context.Context, s string) (map[string]bool, error) { return f.blocks, nil }
+func (f *fakeRex) Blocks(_ context.Context, s string) (map[string]bool, error) {
+	if f.blocksErr != nil {
+		return nil, f.blocksErr
+	}
+	return f.blocks, nil
+}
+
+func runResp(match string, err error) run.Response { return run.Response{Match: match, Err: err} }
 func (f *fakeRex) Status(_ context.Context, s, b string) (rex.Status, error) {
 	return f.statuses[b], nil
 }

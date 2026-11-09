@@ -44,3 +44,18 @@ func TestLoadCorruptIsAnError(t *testing.T) {
 		t.Fatal("want error")
 	}
 }
+
+func TestWriterSkipsOlderGenerations(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.json")
+	var w Writer
+	if err := w.Write(p, []byte(`{"v":2}`), 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write(p, []byte(`{"v":1}`), 1); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(p)
+	if string(data) != `{"v":2}` {
+		t.Errorf("older snapshot overwrote newer: %s", data)
+	}
+}

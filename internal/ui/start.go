@@ -54,16 +54,25 @@ type startPanel struct {
 }
 
 type (
-	launchedMsg struct {
+	// openedMsg: the agent's tab is open (or opening failed).
+	openedMsg struct {
 		res  launch.Result
 		plan launch.Plan
 		err  error
 	}
+	// clickupDoneMsg: the launch's ClickUp writes finished.
+	clickupDoneMsg struct {
+		taskKey  string
+		statusOp uint64
+		assignOp uint64
+		up       launch.Updates
+	}
 	// enterMsg is the answer to "does this task have a live tab?".
 	enterMsg struct {
-		taskID string
-		agent  *store.Agent // nil: no live tab, open the panel
-		err    error        // focus error, if any
+		taskID   string
+		agent    *store.Agent // nil: no live tab, open the panel
+		err      error        // focus error, if any
+		checkErr error        // Rex could not be asked; do nothing
 	}
 )
 
@@ -87,7 +96,10 @@ func (a *App) enterTask(t clickup.Task) tea.Cmd {
 		for i := len(agents) - 1; i >= 0; i-- {
 			ag := agents[i]
 			blocks, err := rx.Blocks(ctx, ag.SessionID)
-			if err != nil || !blocks[ag.BlockID] {
+			if err != nil {
+				return enterMsg{taskID: t.ID, checkErr: err}
+			}
+			if !blocks[ag.BlockID] {
 				continue
 			}
 			return enterMsg{taskID: t.ID, agent: &ag, err: rx.Focus(ctx, ag.SessionID, ag.WindowID)}
@@ -97,8 +109,12 @@ func (a *App) enterTask(t clickup.Task) tea.Cmd {
 }
 
 func (a *App) onEnter(m enterMsg) tea.Cmd {
+	if m.checkErr != nil {
+		a.flash = sRed.Render("can't check the agent's tab: " + m.checkErr.Error())
+		return nil
+	}
 	if m.agent == nil {
-		if t, ok := a.taskByID(m.taskID); ok {
+		if t, ok := a.taskByID(m.taskID); ok && a.mode == modeNormal {
 			a.openStart(t)
 		}
 		return a.scanRepos(false)
@@ -302,47 +318,79 @@ func (a *App) launch() tea.Cmd {
 		a.flash = sRed.Render(problem)
 		return nil
 	}
+	a.lastStart = a.start
 	a.mode, a.start = modeNormal, nil
+	a.launching[lp.Task.ID] = true
 	a.flash = sFaint.Render("starting " + lp.Task.Key() + "…")
 	d := launch.Deps{Runner: a.deps.Runner, Rex: a.deps.Rex, ClickUp: a.deps.ClickUp, Now: a.deps.Now}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		res, err := launch.Run(ctx, d, lp)
-		return launchedMsg{res: res, plan: lp, err: err}
+		res, err := launch.Open(ctx, d, lp)
+		return openedMsg{res: res, plan: lp, err: err}
 	}
 }
 
-func (a *App) onLaunched(m launchedMsg) tea.Cmd {
+// onOpened records the agent as soon as its tab exists (SPEC §4.4 step 3),
+// then starts the ClickUp writes (step 4).
+func (a *App) onOpened(m openedMsg) tea.Cmd {
+	delete(a.launching, m.plan.Task.ID)
 	if m.err != nil {
 		a.flash = sRed.Render(m.err.Error())
+		if a.mode == modeNormal && a.lastStart != nil {
+			a.start, a.mode = a.lastStart, modeStart // keep the panel's edits
+		}
 		return nil
 	}
+	a.lastStart = nil
 	ag := m.res.Agent
 	a.state.AddAgent(ag)
 	a.agentInfo[ag.BlockID] = agentInfo{known: true, alive: true}
 	if ag.Repo != "" {
 		a.state.RememberRepo(ag.Client, ag.Repo)
 	}
-	// Show the ClickUp changes at once; the next refresh confirms them.
-	if t, ok := a.taskByID(ag.TaskID); ok {
-		failed := strings.Join(m.res.Warnings, " ")
-		if m.plan.SetStatus != "" && !strings.Contains(failed, "move to") {
-			t.Status = m.plan.SetStatus
-			if st, ok := a.statusInfo(t.ListID, t.Status); ok {
-				t.StatusType, t.StatusOrder = st.Type, st.Order
-			}
-		}
-		if m.plan.AssignMe != 0 && !strings.Contains(failed, "assign") && !t.AssignedTo(m.plan.AssignMe) {
-			t.Assignees = append(append([]clickup.User(nil), t.Assignees...), a.cache.Me)
-		}
-		a.putTask(t)
-	}
 	a.flash = sGreen.Render("started " + ag.TaskKey + " in " + ag.Client)
 	if len(m.res.Warnings) > 0 {
 		a.flash += sYellow.Render(" · " + strings.Join(m.res.Warnings, " · "))
 	}
-	return tea.Batch(a.saveState(), a.saveCache(), a.refreshAgents())
+	cmds := []tea.Cmd{a.saveState(), a.refreshAgents()}
+
+	// Show the ClickUp changes at once; undo each one that fails.
+	p, t := m.plan, m.plan.Task
+	var statusOp, assignOp uint64
+	if p.SetStatus != "" {
+		cur, _ := a.taskByID(t.ID)
+		st, ok := a.statusInfo(t.ListID, p.SetStatus)
+		if !ok {
+			st = clickup.Status{Name: p.SetStatus, Type: cur.StatusType, Order: cur.StatusOrder}
+		}
+		statusOp = a.newOp(t.ID, setStatus(st, a.now()), setStatus(clickup.Status{Name: cur.Status, Type: cur.StatusType, Order: cur.StatusOrder}, cur.Done))
+	}
+	if p.AssignMe != 0 {
+		assignOp = a.newOp(t.ID, setAssigned(a.cache.Me, true), setAssigned(a.cache.Me, false))
+	}
+	if statusOp != 0 || assignOp != 0 {
+		cu := a.deps.ClickUp
+		cmds = append(cmds, func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			return clickupDoneMsg{taskKey: t.Key(), statusOp: statusOp, assignOp: assignOp, up: launch.ApplyClickUp(ctx, cu, p)}
+		})
+	}
+	return tea.Batch(cmds...)
+}
+
+func (a *App) onClickupDone(m clickupDoneMsg) tea.Cmd {
+	if m.statusOp != 0 {
+		a.finishOp(m.statusOp, m.up.StatusOK)
+	}
+	if m.assignOp != 0 {
+		a.finishOp(m.assignOp, m.up.AssignOK)
+	}
+	if len(m.up.Warnings) > 0 {
+		a.flash = sYellow.Render(m.taskKey + ": " + strings.Join(m.up.Warnings, " · "))
+	}
+	return tea.Batch(a.saveCache(), a.refreshAfterWrite())
 }
 
 // statusInfo finds a status of a list among the statuses seen so far.
@@ -462,4 +510,21 @@ func shortHome(p string) string {
 		return "~" + strings.TrimPrefix(p, home)
 	}
 	return p
+}
+
+// paste adds pasted text to the field being edited.
+func (a *App) paste(text string) {
+	switch a.mode {
+	case modeComment:
+		a.input += text
+	case modeStart:
+		switch p := a.start; p.field {
+		case fRepo:
+			p.repoFilter, p.repoIdx = p.repoFilter+text, 0
+		case fBranch:
+			p.branch += text
+		case fPrompt:
+			p.prompt += text
+		}
+	}
 }

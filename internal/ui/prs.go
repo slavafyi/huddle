@@ -198,19 +198,33 @@ func prDetail(p github.PR) []string {
 
 // mergedWorktrees returns worktree agents whose branch has a merged PR.
 func (a *App) mergedWorktrees() []store.Agent {
-	merged := map[string]bool{}
+	merged := map[[2]string]bool{}
 	for _, p := range a.cache.PRs {
 		if p.Kind == github.Merged {
-			merged[p.Branch] = true
+			merged[[2]string{p.RepoName, p.Branch}] = true
 		}
 	}
 	var out []store.Agent
 	for _, ag := range a.state.Agents {
-		if ag.Workspace == workspace.Worktree.String() && ag.Branch != "" && merged[ag.Branch] {
+		if ag.Workspace == workspace.Worktree.ID() && ag.Branch != "" && merged[[2]string{ag.Repo, ag.Branch}] {
 			out = append(out, ag)
 		}
 	}
 	return out
+}
+
+// dirInUse reports whether any agent in dir may still be running: its tab is
+// open, or Rex has not told us yet.
+func (a *App) dirInUse(dir string) bool {
+	for _, ag := range a.state.Agents {
+		if ag.Dir != dir {
+			continue
+		}
+		if i := a.agentInfo[ag.BlockID]; !i.known || i.alive {
+			return true
+		}
+	}
+	return false
 }
 
 type cleanedMsg struct {
@@ -224,7 +238,7 @@ func (a *App) cleanupMerged() tea.Cmd {
 	var todo []store.Agent
 	var keys, open []string
 	for _, ag := range a.mergedWorktrees() {
-		if a.agentInfo[ag.BlockID].alive {
+		if a.dirInUse(ag.Dir) {
 			open = append(open, ag.TaskKey)
 			continue
 		}

@@ -42,6 +42,13 @@ type Result struct {
 	Warnings []string
 }
 
+// Updates reports which ClickUp writes succeeded.
+type Updates struct {
+	StatusOK bool
+	AssignOK bool
+	Warnings []string
+}
+
 // Argv returns the command for an agent, with {prompt} filled in. The shell
 // agent has no command.
 func Argv(agents map[string][]string, name, prompt string) []string {
@@ -71,10 +78,10 @@ func clientSession(sessions map[string]string, stored, client string) string {
 	return found
 }
 
-// Run starts the agent. Steps run in order and stop at the first error,
-// with no rollback. Once the tab is open the agent is returned even if a
-// later step fails; those failures become warnings.
-func Run(ctx context.Context, d Deps, p Plan) (Result, error) {
+// Open prepares the folder and opens the agent's tab (SPEC §4.4 steps 1–2).
+// It stops at the first error, with no rollback. The caller saves the
+// returned agent record (step 3) before calling ApplyClickUp (step 4).
+func Open(ctx context.Context, d Deps, p Plan) (Result, error) {
 	dir, err := workspace.Prepare(ctx, d.Runner, p.Workspace)
 	if err != nil {
 		return Result{}, err
@@ -97,7 +104,7 @@ func Run(ctx context.Context, d Deps, p Plan) (Result, error) {
 
 	res := Result{Agent: store.Agent{
 		TaskID: p.Task.ID, TaskKey: p.Task.Key(), Title: p.Task.Name, Client: p.Task.ListName,
-		Workspace: p.Workspace.Kind.String(), Dir: dir, Agent: p.AgentName,
+		Workspace: p.Workspace.Kind.ID(), Dir: dir, Agent: p.AgentName,
 		Placement: pl, Started: d.Now(),
 	}}
 	if p.Workspace.Kind != workspace.Scratch {
@@ -115,16 +122,26 @@ func Run(ctx context.Context, d Deps, p Plan) (Result, error) {
 		}
 	}
 
+	return res, nil
+}
+
+// ApplyClickUp moves the task and assigns me, as the plan says. It stops at
+// the first failure.
+func ApplyClickUp(ctx context.Context, cu clickup.Client, p Plan) Updates {
+	var u Updates
 	if p.SetStatus != "" {
-		if err := d.ClickUp.SetStatus(ctx, p.Task.ID, p.SetStatus); err != nil {
-			res.Warnings = append(res.Warnings, "move to "+p.SetStatus+": "+err.Error())
-			return res, nil
+		if err := cu.SetStatus(ctx, p.Task.ID, p.SetStatus); err != nil {
+			u.Warnings = append(u.Warnings, "move to "+p.SetStatus+": "+err.Error())
+			return u
 		}
+		u.StatusOK = true
 	}
 	if p.AssignMe != 0 {
-		if err := d.ClickUp.SetAssignee(ctx, p.Task.ID, p.AssignMe, true); err != nil {
-			res.Warnings = append(res.Warnings, "assign: "+err.Error())
+		if err := cu.SetAssignee(ctx, p.Task.ID, p.AssignMe, true); err != nil {
+			u.Warnings = append(u.Warnings, "assign: "+err.Error())
+			return u
 		}
+		u.AssignOK = true
 	}
-	return res, nil
+	return u
 }

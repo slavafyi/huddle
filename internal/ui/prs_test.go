@@ -101,7 +101,7 @@ func TestPRErrorKeepsCache(t *testing.T) {
 func TestCleanupMergedWorktreesAsksFirst(t *testing.T) {
 	e, _ := prEnv(t)
 	e.app.cache.Repos = []workspace.Repo{{Name: "snowcap", Path: "/r/snowcap"}}
-	merged := store.Agent{TaskID: "t1", TaskKey: "DEV-7808", Client: "Harbor and Goods", Workspace: workspace.Worktree.String(),
+	merged := store.Agent{TaskID: "t1", TaskKey: "DEV-7808", Client: "Harbor and Goods", Workspace: workspace.Worktree.ID(),
 		Repo: "snowcap", Branch: "feature/dev-7808-preorder", Dir: "/w/snowcap/dev-7808",
 		Placement: rex.Placement{SessionID: "session:S", WindowID: "window:7", BlockID: "block:7"}}
 	open := merged
@@ -128,7 +128,7 @@ func TestCleanupSkipsOpenTabsAndReportsGitErrors(t *testing.T) {
 	e, _ := prEnv(t)
 	e.app.cache.Repos = []workspace.Repo{{Name: "snowcap", Path: "/r/snowcap"}}
 	e.runner.Responses = []run.Response{{Match: "git -C /r/snowcap worktree remove", Err: errors.New("contains modified files")}}
-	ag := store.Agent{TaskKey: "DEV-7808", Workspace: workspace.Worktree.String(), Repo: "snowcap", Branch: "feature/dev-7808-preorder",
+	ag := store.Agent{TaskKey: "DEV-7808", Workspace: workspace.Worktree.ID(), Repo: "snowcap", Branch: "feature/dev-7808-preorder",
 		Dir: "/w/snowcap/dev-7808", Placement: rex.Placement{SessionID: "session:S", BlockID: "block:7"}}
 	e.app.state.AddAgent(ag)
 	e.rex.blocks = map[string]bool{"block:7": true}

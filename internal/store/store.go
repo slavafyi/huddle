@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // Load decodes the JSON file at path into v. A missing file leaves v as is.
@@ -31,6 +32,35 @@ func Save(path string, v any) error {
 	if err != nil {
 		return err
 	}
+	return writeFile(path, data)
+}
+
+// Writer writes snapshots in the background without letting an older
+// snapshot replace a newer one. Callers marshal on their own goroutine (so
+// the snapshot can't change underneath) and number snapshots in order.
+type Writer struct {
+	mu      sync.Mutex
+	written map[string]uint64
+}
+
+// Write saves data to path unless a later generation was already written.
+func (w *Writer) Write(path string, data []byte, gen uint64) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.written == nil {
+		w.written = map[string]uint64{}
+	}
+	if gen <= w.written[path] {
+		return nil
+	}
+	if err := writeFile(path, data); err != nil {
+		return err
+	}
+	w.written[path] = gen
+	return nil
+}
+
+func writeFile(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err

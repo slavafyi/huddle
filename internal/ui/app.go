@@ -78,8 +78,19 @@ type App struct {
 	agents *agentView
 	prs    *prView
 
-	loadingPRs bool
-	prErr      error
+	loadingPRs    bool
+	prErr         error
+	loadingAgents bool
+	refreshAgain  bool
+
+	ops       map[uint64]*op
+	opID      uint64
+	completed uint64
+	launching map[string]bool
+	lastStart *startPanel
+
+	writer  *store.Writer
+	saveGen uint64
 
 	agentInfo   map[string]agentInfo
 	confirmText string
@@ -101,6 +112,7 @@ type (
 		full  bool
 		at    time.Time
 		err   error
+		seq   uint64 // App.completed when the refresh started
 	}
 	tickMsg  time.Time
 	errMsg   struct{ err error }
@@ -120,7 +132,8 @@ func NewApp(d Deps) *App {
 		d.Runner = run.Exec{}
 	}
 	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView(), today: newTodayView(), agents: newAgentView(), prs: newPRView(),
-		statuses: map[string][]clickup.Status{}, agentInfo: map[string]agentInfo{}}
+		statuses: map[string][]clickup.Status{}, agentInfo: map[string]agentInfo{},
+		ops: map[uint64]*op{}, launching: map[string]bool{}, writer: &store.Writer{}}
 	a.state = d.State
 	a.applyCache(d.Cache)
 	return a
@@ -158,20 +171,6 @@ func (a *App) scanRepos(force bool) tea.Cmd {
 	return func() tea.Msg { return reposMsg{repos: workspace.ScanRepos(roots), at: now} }
 }
 
-func (a *App) saveState() tea.Cmd {
-	s, path := a.state, a.deps.StatePath
-	if path == "" {
-		return nil
-	}
-	s.Version = store.StateVersion
-	return func() tea.Msg {
-		if err := store.Save(path, s); err != nil {
-			return errMsg{fmt.Errorf("save state: %w", err)}
-		}
-		return savedMsg{}
-	}
-}
-
 func (a *App) tick() tea.Cmd {
 	return tea.Tick(tickEvery, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
@@ -192,7 +191,7 @@ func (a *App) refreshTasks(full bool) tea.Cmd {
 		return nil
 	}
 	a.loadingTasks = true
-	cu, me, now := a.deps.ClickUp, a.cache.Me, a.now()
+	cu, me, now, seq := a.deps.ClickUp, a.cache.Me, a.now(), a.completed
 	since := time.Time{}
 	if !full && !a.cache.TasksSyncedAt.IsZero() {
 		since = a.cache.TasksSyncedAt.Add(-tasksSinceMargin)
@@ -208,21 +207,7 @@ func (a *App) refreshTasks(full bool) tea.Cmd {
 			me = u
 		}
 		ts, err := cu.MyTasks(ctx, me.ID, since, now)
-		return tasksMsg{me: me, tasks: ts, full: since.IsZero(), at: now, err: err}
-	}
-}
-
-func (a *App) saveCache() tea.Cmd {
-	c, path := a.cache, a.deps.CachePath
-	if path == "" {
-		return nil
-	}
-	c.Version = store.CacheVersion
-	return func() tea.Msg {
-		if err := store.Save(path, c); err != nil {
-			return errMsg{fmt.Errorf("save cache: %w", err)}
-		}
-		return savedMsg{}
+		return tasksMsg{me: me, tasks: ts, full: since.IsZero(), at: now, err: err, seq: seq}
 	}
 }
 
@@ -233,6 +218,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width, a.height = msg.Width, msg.Height
 	case tea.KeyPressMsg:
 		return a, a.handleKey(msg)
+	case tea.PasteMsg:
+		a.paste(strings.Join(strings.Fields(msg.Content), " "))
 	case tickMsg:
 		cmds := []tea.Cmd{a.tick(), a.refreshAgents()}
 		if a.now().Sub(a.cache.PRsAt) >= prsEvery {
@@ -244,9 +231,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(cmds...)
 	case tasksMsg:
 		a.loadingTasks = false
+		var again tea.Cmd // a write finished while this refresh ran
+		if a.refreshAgain {
+			a.refreshAgain = false
+			again = a.refreshTasks(false)
+		}
 		if msg.err != nil {
 			a.syncErr = msg.err
-			return a, nil
+			return a, again
 		}
 		a.syncErr = nil
 		a.cache.Me = msg.me
@@ -255,8 +247,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.full {
 			a.cache.TasksFullAt = msg.at
 		}
+		a.reapplyOps(msg.seq)
 		a.rebuild()
-		return a, a.saveCache()
+		return a, tea.Batch(a.saveCache(), again)
 	case statusesMsg:
 		if msg.err != nil {
 			a.flash = sRed.Render(msg.err.Error())
@@ -266,13 +259,19 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.showPicker(msg.taskID, msg.statuses)
 	case writeMsg:
 		return a, a.onWrite(msg)
-	case launchedMsg:
-		return a, a.onLaunched(msg)
+	case openedMsg:
+		return a, a.onOpened(msg)
+	case clickupDoneMsg:
+		return a, a.onClickupDone(msg)
 	case enterMsg:
 		return a, a.onEnter(msg)
 	case agentsMsg:
-		for b, i := range msg {
+		a.loadingAgents = false
+		for b, i := range msg.info {
 			a.agentInfo[b] = i
+		}
+		if msg.err != nil {
+			a.flash = sYellow.Render("Rex: " + msg.err.Error())
 		}
 		a.rebuild()
 	case agentEventMsg:
@@ -389,9 +388,14 @@ func (a *App) taskAction(k string) tea.Cmd {
 		a.mode, a.input, a.commentTask = modeComment, "", t.ID
 	case "a":
 		return a.toggleAssign(t)
-	case "enter":
-		return a.enterTask(t)
-	case "shift+enter":
+	case "enter", "shift+enter":
+		if a.launching[t.ID] {
+			a.flash = sYellow.Render("already starting " + t.Key() + "…")
+			return nil
+		}
+		if k == "enter" {
+			return a.enterTask(t)
+		}
 		a.openStart(t)
 		return a.scanRepos(false)
 	}

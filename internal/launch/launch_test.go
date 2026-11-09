@@ -65,6 +65,15 @@ func (f *fakeCU) SetAssignee(_ context.Context, id string, u int64, add bool) er
 
 var now = time.Date(2026, 11, 9, 13, 0, 0, 0, time.UTC)
 
+// runAll runs both launch steps like the UI does.
+func runAll(ctx context.Context, d Deps, p Plan) (Result, Updates, error) {
+	res, err := Open(ctx, d, p)
+	if err != nil {
+		return res, Updates{}, err
+	}
+	return res, ApplyClickUp(ctx, d.ClickUp, p), nil
+}
+
 func task() clickup.Task {
 	return clickup.Task{ID: "t1", CustomID: "DEV-7053", Name: "Research low stock notifications", ListName: "Snowcap"}
 }
@@ -84,9 +93,12 @@ func TestScratchInExistingSession(t *testing.T) {
 		SessionID: "session:S", TabName: "DEV-7053 Research low stock notifications",
 		SetStatus: "in progress", AssignMe: 1,
 	}
-	res, err := Run(context.Background(), d, p)
+	res, up, err := runAll(context.Background(), d, p)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !up.StatusOK || !up.AssignOK {
+		t.Errorf("updates = %+v", up)
 	}
 	dir := root + "/dev-7053-research-low-stock-notifications"
 	wantRex := []string{
@@ -102,7 +114,7 @@ func TestScratchInExistingSession(t *testing.T) {
 	}
 	a := res.Agent
 	if a.TaskID != "t1" || a.TaskKey != "DEV-7053" || a.Client != "Snowcap" || a.Dir != dir ||
-		a.BlockID != "block:2" || a.SessionID != "session:S" || a.Workspace != "Scratch" || !a.Started.Equal(now) {
+		a.BlockID != "block:2" || a.SessionID != "session:S" || a.Workspace != "scratch" || !a.Started.Equal(now) {
 		t.Errorf("agent = %+v", a)
 	}
 }
@@ -120,7 +132,7 @@ func TestWorktreeInNewSessionWhenStoredSessionIsGone(t *testing.T) {
 		Workspace: workspace.Plan{Kind: workspace.Worktree, Repo: workspace.Repo{Name: "snowcap", Path: "/r/snowcap"}, Branch: "feature/dev-7053-x", TaskKey: "dev-7053", WorktreeRoot: root},
 		AgentName: "shell", SessionID: "session:gone", TabName: "DEV-7053 R",
 	}
-	res, err := Run(context.Background(), d, p)
+	res, err := runAll3(context.Background(), d, p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +145,7 @@ func TestWorktreeInNewSessionWhenStoredSessionIsGone(t *testing.T) {
 	if res.Agent.Repo != "snowcap" || res.Agent.Branch != "feature/dev-7053-x" || res.Agent.SessionID != "session:new" {
 		t.Errorf("agent = %+v", res.Agent)
 	}
-	if calls := f.Calls(); !strings.Contains(strings.Join(calls, "\n"), "worktree add -b feature/dev-7053-x") {
+	if calls := f.Calls(); !strings.Contains(strings.Join(calls, "\n"), "worktree add --no-track -b feature/dev-7053-x") {
 		t.Errorf("git calls: %v", calls)
 	}
 }
@@ -142,7 +154,7 @@ func TestPrepareErrorStopsBeforeRex(t *testing.T) {
 	r, cu, f, d := setup()
 	f.Responses = []run.Response{{Match: "git -C /r/s fetch", Err: errors.New("offline")}}
 	p := Plan{Task: task(), Workspace: workspace.Plan{Kind: workspace.Worktree, Repo: workspace.Repo{Name: "s", Path: "/r/s"}, Branch: "b", TaskKey: "k", WorktreeRoot: t.TempDir()}, SetStatus: "in progress"}
-	if _, err := Run(context.Background(), d, p); err == nil {
+	if _, err := runAll3(context.Background(), d, p); err == nil {
 		t.Fatal("want error")
 	}
 	if len(r.calls) != 0 || len(cu.writes) != 0 {
@@ -154,12 +166,15 @@ func TestClickUpErrorAfterLaunchIsAWarning(t *testing.T) {
 	_, cu, _, d := setup()
 	cu.err = errors.New("500")
 	p := Plan{Task: task(), Workspace: workspace.Plan{Kind: workspace.Scratch, ScratchRoot: t.TempDir(), TaskKey: "k", Slug: "s"}, SessionID: "session:S", SetStatus: "in progress", AssignMe: 1}
-	res, err := Run(context.Background(), d, p)
+	res, up, err := runAll(context.Background(), d, p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Agent.BlockID == "" || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "500") {
-		t.Errorf("res = %+v", res)
+	if res.Agent.BlockID == "" || len(up.Warnings) != 1 || !strings.Contains(up.Warnings[0], "500") {
+		t.Errorf("res = %+v up = %+v", res, up)
+	}
+	if up.StatusOK || up.AssignOK {
+		t.Errorf("no write succeeded: %+v", up)
 	}
 	if len(cu.writes) != 1 {
 		t.Errorf("should stop after the first failed write: %v", cu.writes)
@@ -170,7 +185,7 @@ func TestFocusWithoutRemoteControlIsAWarning(t *testing.T) {
 	r, _, _, d := setup()
 	r.focusErr = rex.ErrRemoteControl
 	p := Plan{Task: task(), Workspace: workspace.Plan{Kind: workspace.Scratch, ScratchRoot: t.TempDir(), TaskKey: "k", Slug: "s"}, SessionID: "session:S"}
-	res, err := Run(context.Background(), d, p)
+	res, err := runAll3(context.Background(), d, p)
 	if err != nil || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "Remote Control") {
 		t.Errorf("res = %+v err = %v", res, err)
 	}
@@ -190,11 +205,27 @@ func TestArgv(t *testing.T) {
 func TestFindsClientSessionByNameWhenNoneStored(t *testing.T) {
 	r, _, _, d := setup()
 	p := Plan{Task: task(), Workspace: workspace.Plan{Kind: workspace.Scratch, ScratchRoot: t.TempDir(), TaskKey: "k", Slug: "s"}, TabName: "T"}
-	res, err := Run(context.Background(), d, p)
+	res, err := runAll3(context.Background(), d, p)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(r.calls[1], "new-window session:S | T") || res.Agent.SessionID != "session:S" {
 		t.Errorf("should reuse the session named after the client: %v", r.calls)
+	}
+}
+
+func runAll3(ctx context.Context, d Deps, p Plan) (Result, error) {
+	res, _, err := runAll(ctx, d, p)
+	return res, err
+}
+
+func TestOpenDoesNotTouchClickUp(t *testing.T) {
+	_, cu, _, d := setup()
+	p := Plan{Task: task(), Workspace: workspace.Plan{Kind: workspace.Scratch, ScratchRoot: t.TempDir(), TaskKey: "k", Slug: "s"}, SessionID: "session:S", SetStatus: "in progress", AssignMe: 1}
+	if _, err := Open(context.Background(), d, p); err != nil {
+		t.Fatal(err)
+	}
+	if len(cu.writes) != 0 {
+		t.Errorf("Open must not write to ClickUp: %v", cu.writes)
 	}
 }

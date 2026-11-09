@@ -28,12 +28,11 @@ type (
 		statuses []clickup.Status
 		err      error
 	}
-	// writeMsg reports a finished ClickUp write. On error, prev (if set) is
-	// put back.
+	// writeMsg reports a finished ClickUp write for op (0: no screen change).
 	writeMsg struct {
-		prev *clickup.Task
-		ok   string
-		err  error
+		op  uint64
+		ok  string
+		err error
 	}
 )
 
@@ -61,6 +60,10 @@ func (a *App) openStatusPicker(t clickup.Task) tea.Cmd {
 }
 
 func (a *App) showPicker(taskID string, st []clickup.Status) {
+	if len(st) == 0 {
+		a.flash = sYellow.Render("this list has no statuses")
+		return
+	}
 	t, _ := a.taskByID(taskID)
 	p := picker{taskID: taskID, statuses: st}
 	for i, s := range st {
@@ -100,42 +103,52 @@ func (a *App) applyStatus(s clickup.Status) tea.Cmd {
 	if !ok || t.Status == s.Name {
 		return nil
 	}
-	prev := t
-	t.Status, t.StatusType, t.StatusOrder = s.Name, s.Type, s.Order
-	t.Done = time.Time{}
-	if s.Type == "closed" || s.Type == "done" {
-		t.Done = a.now()
-	}
-	a.putTask(t)
+	id := a.newOp(t.ID, setStatus(s, a.now()), setStatus(clickup.Status{Name: t.Status, Type: t.StatusType, Order: t.StatusOrder}, t.Done))
 	cu := a.deps.ClickUp
-	return a.write(&prev, fmt.Sprintf("%s → %s", t.Key(), s.Name), func(ctx context.Context) error {
+	return a.write(id, fmt.Sprintf("%s → %s", t.Key(), s.Name), func(ctx context.Context) error {
 		return cu.SetStatus(ctx, t.ID, s.Name)
 	})
 }
 
-// toggleAssign adds or removes me as assignee, on screen at once.
-func (a *App) toggleAssign(t clickup.Task) tea.Cmd {
-	prev := t
-	me := a.cache.Me
-	add := !t.AssignedTo(me.ID)
-	if add {
-		t.Assignees = append(append([]clickup.User(nil), t.Assignees...), me)
-	} else {
+// setStatus returns a change that sets a task's status. done is used when
+// the status is a done/closed one.
+func setStatus(s clickup.Status, done time.Time) func(*clickup.Task) {
+	return func(t *clickup.Task) {
+		t.Status, t.StatusType, t.StatusOrder = s.Name, s.Type, s.Order
+		t.Done = time.Time{}
+		if s.Type == "closed" || s.Type == "done" {
+			t.Done = done
+		}
+	}
+}
+
+// setAssigned returns a change that adds (or removes) me as assignee.
+func setAssigned(me clickup.User, on bool) func(*clickup.Task) {
+	return func(t *clickup.Task) {
 		var rest []clickup.User
 		for _, u := range t.Assignees {
 			if u.ID != me.ID {
 				rest = append(rest, u)
 			}
 		}
+		if on {
+			rest = append(rest, me)
+		}
 		t.Assignees = rest
 	}
-	a.putTask(t)
+}
+
+// toggleAssign adds or removes me as assignee, on screen at once.
+func (a *App) toggleAssign(t clickup.Task) tea.Cmd {
+	me := a.cache.Me
+	add := !t.AssignedTo(me.ID)
+	id := a.newOp(t.ID, setAssigned(me, add), setAssigned(me, !add))
 	msg := t.Key() + ": assigned to you"
 	if !add {
 		msg = t.Key() + ": unassigned you"
 	}
 	cu := a.deps.ClickUp
-	return a.write(&prev, msg, func(ctx context.Context) error {
+	return a.write(id, msg, func(ctx context.Context) error {
 		return cu.SetAssignee(ctx, t.ID, me.ID, add)
 	})
 }
@@ -154,7 +167,7 @@ func (a *App) commentKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		cu := a.deps.ClickUp
-		return a.write(nil, t.Key()+": comment added", func(ctx context.Context) error {
+		return a.write(0, t.Key()+": comment added", func(ctx context.Context) error {
 			return cu.AddComment(ctx, t.ID, text)
 		})
 	case "backspace":
@@ -168,34 +181,22 @@ func (a *App) commentKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // write runs a ClickUp write in the background.
-func (a *App) write(prev *clickup.Task, ok string, fn func(context.Context) error) tea.Cmd {
+func (a *App) write(op uint64, ok string, fn func(context.Context) error) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		return writeMsg{prev: prev, ok: ok, err: fn(ctx)}
+		return writeMsg{op: op, ok: ok, err: fn(ctx)}
 	}
 }
 
 func (a *App) onWrite(m writeMsg) tea.Cmd {
+	a.finishOp(m.op, m.err == nil)
 	if m.err != nil {
-		if m.prev != nil {
-			a.putTask(*m.prev)
-		}
 		a.flash = sRed.Render(m.err.Error())
 		return nil
 	}
 	a.flash = sGreen.Render(m.ok)
-	return a.saveCache()
-}
-
-// putTask replaces a task in the cache by ID and rebuilds the views.
-func (a *App) putTask(t clickup.Task) {
-	for i := range a.cache.Tasks {
-		if a.cache.Tasks[i].ID == t.ID {
-			a.cache.Tasks[i] = t
-		}
-	}
-	a.rebuild()
+	return tea.Batch(a.saveCache(), a.refreshAfterWrite())
 }
 
 func (a *App) renderPicker() []string {

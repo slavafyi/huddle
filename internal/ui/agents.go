@@ -21,7 +21,12 @@ type agentInfo struct {
 }
 
 type (
-	agentsMsg     map[string]agentInfo // by block ID
+	// agentsMsg has fresh info by block ID. Agents whose session Rex could
+	// not list are left out, so they keep their last known state.
+	agentsMsg struct {
+		info map[string]agentInfo
+		err  error
+	}
 	agentEventMsg struct {
 		ev rex.Event
 		ch <-chan rex.Event
@@ -126,26 +131,34 @@ func (l agentLookup) state(taskID string) string {
 
 // refreshAgents asks Rex which agent tabs still exist and their state.
 func (a *App) refreshAgents() tea.Cmd {
-	if a.deps.Rex == nil || len(a.state.Agents) == 0 {
+	if a.deps.Rex == nil || len(a.state.Agents) == 0 || a.loadingAgents {
 		return nil
 	}
+	a.loadingAgents = true
 	agents, rx := append([]store.Agent(nil), a.state.Agents...), a.deps.Rex
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		blocks := map[string]map[string]bool{}
-		out := agentsMsg{}
+		failed := map[string]bool{}
+		out := agentsMsg{info: map[string]agentInfo{}}
 		for _, ag := range agents {
-			if _, ok := blocks[ag.SessionID]; !ok {
-				b, _ := rx.Blocks(ctx, ag.SessionID)
+			if _, ok := blocks[ag.SessionID]; !ok && !failed[ag.SessionID] {
+				b, err := rx.Blocks(ctx, ag.SessionID)
+				if err != nil {
+					failed[ag.SessionID], out.err = true, err
+				}
 				blocks[ag.SessionID] = b
+			}
+			if failed[ag.SessionID] {
+				continue // keep the last known state
 			}
 			i := agentInfo{known: true, alive: blocks[ag.SessionID][ag.BlockID]}
 			if i.alive {
 				i.status, _ = rx.Status(ctx, ag.SessionID, ag.BlockID)
 				i.line, _ = rx.LastLine(ctx, ag.SessionID, ag.BlockID)
 			}
-			out[ag.BlockID] = i
+			out.info[ag.BlockID] = i
 		}
 		return out
 	}

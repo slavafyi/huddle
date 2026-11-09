@@ -35,7 +35,7 @@ func TestLiveLaunch(t *testing.T) {
 	p := Plan{Task: tk, TabName: "TEST-1 Live launch check",
 		Workspace: workspace.Plan{Kind: workspace.Scratch, ScratchRoot: root, TaskKey: "test-1", Slug: "live-launch-check"}}
 
-	first, err := Run(ctx, d, p)
+	first, err := Open(ctx, d, p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestLiveLaunch(t *testing.T) {
 	// A second task for the same client opens a tab in the same session,
 	// found by name even without a stored ID.
 	p.Task.ID, p.TabName = "x2", "TEST-2 Second"
-	second, err := Run(ctx, d, p)
+	second, err := Open(ctx, d, p)
 	if err != nil {
 		t.Fatal(err)
 	}

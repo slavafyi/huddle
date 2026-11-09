@@ -38,6 +38,11 @@ func runApp() error {
 	if err != nil {
 		return err
 	}
+	// Child processes (rex, gh, git, and through rex the agent tabs) must
+	// not inherit the token.
+	os.Unsetenv("CLICKUP_API_TOKEN")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // stops the rex event stream on quit
 	var cache store.Cache
 	if err := store.Load(store.CachePath(), &cache); err != nil || cache.Version != store.CacheVersion {
 		cache = store.Cache{} // unreadable or old cache: start fresh
@@ -59,7 +64,7 @@ func runApp() error {
 		State:     state,
 		CachePath: store.CachePath(),
 		StatePath: store.StatePath(),
-		Watch:     rex.Watch,
+		Watch:     func(context.Context) (<-chan rex.Event, error) { return rex.Watch(ctx) },
 
 		HomeSession: os.Getenv("REX_SESSION"),
 	}
