@@ -1,0 +1,118 @@
+// Package launch starts an agent on a task: it prepares the folder, opens a
+// Rex tab, and updates ClickUp.
+package launch
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/slavafyi/cuddle/internal/clickup"
+	"github.com/slavafyi/cuddle/internal/rex"
+	"github.com/slavafyi/cuddle/internal/run"
+	"github.com/slavafyi/cuddle/internal/store"
+	"github.com/slavafyi/cuddle/internal/workspace"
+)
+
+// Deps are the services a launch uses.
+type Deps struct {
+	Runner  run.Runner
+	Rex     rex.Client
+	ClickUp clickup.Client
+	Now     func() time.Time
+}
+
+// Plan is everything the Start panel decided.
+type Plan struct {
+	Task      clickup.Task
+	Workspace workspace.Plan
+	AgentName string
+	Argv      []string // nil opens a shell
+	SessionID string   // the client's stored session, "" if none
+	TabName   string
+	SetStatus string // "" leaves the status alone
+	AssignMe  int64  // 0 leaves assignees alone
+}
+
+// Result is the started agent and problems after the tab opened.
+type Result struct {
+	Agent    store.Agent
+	Warnings []string
+}
+
+// Argv returns the command for an agent, with {prompt} filled in. The shell
+// agent has no command.
+func Argv(agents map[string][]string, name, prompt string) []string {
+	tmpl, ok := agents[name]
+	if !ok {
+		return nil
+	}
+	out := make([]string, len(tmpl))
+	for i, a := range tmpl {
+		out[i] = strings.ReplaceAll(a, "{prompt}", prompt)
+	}
+	return out
+}
+
+// Run starts the agent. Steps run in order and stop at the first error,
+// with no rollback. Once the tab is open the agent is returned even if a
+// later step fails; those failures become warnings.
+func Run(ctx context.Context, d Deps, p Plan) (Result, error) {
+	dir, err := workspace.Prepare(ctx, d.Runner, p.Workspace)
+	if err != nil {
+		return Result{}, err
+	}
+
+	exists := false
+	if p.SessionID != "" {
+		sessions, err := d.Rex.Sessions(ctx)
+		if err != nil {
+			return Result{}, fmt.Errorf("list Rex sessions: %w", err)
+		}
+		_, exists = sessions[p.SessionID]
+	}
+	var pl rex.Placement
+	if exists {
+		pl, err = d.Rex.NewWindow(ctx, p.SessionID, p.TabName, dir, p.Argv)
+	} else {
+		pl, err = d.Rex.NewSession(ctx, p.Task.ListName, dir, p.TabName, p.Argv)
+	}
+	if err != nil {
+		return Result{}, fmt.Errorf("open Rex tab: %w", err)
+	}
+
+	res := Result{Agent: store.Agent{
+		TaskID: p.Task.ID, TaskKey: p.Task.Key(), Title: p.Task.Name, Client: p.Task.ListName,
+		Workspace: p.Workspace.Kind.String(), Dir: dir, Agent: p.AgentName,
+		Placement: pl, Started: d.Now(),
+	}}
+	if p.Workspace.Kind != workspace.Scratch {
+		res.Agent.Repo = p.Workspace.Repo.Name
+	}
+	if p.Workspace.Kind == workspace.Worktree {
+		res.Agent.Branch = p.Workspace.Branch
+	}
+
+	if err := d.Rex.Focus(ctx, pl.SessionID, pl.WindowID); err != nil {
+		if errors.Is(err, rex.ErrRemoteControl) {
+			res.Warnings = append(res.Warnings, err.Error())
+		} else {
+			res.Warnings = append(res.Warnings, "focus tab: "+err.Error())
+		}
+	}
+
+	if p.SetStatus != "" {
+		if err := d.ClickUp.SetStatus(ctx, p.Task.ID, p.SetStatus); err != nil {
+			res.Warnings = append(res.Warnings, "move to "+p.SetStatus+": "+err.Error())
+			return res, nil
+		}
+	}
+	if p.AssignMe != 0 {
+		if err := d.ClickUp.SetAssignee(ctx, p.Task.ID, p.AssignMe, true); err != nil {
+			res.Warnings = append(res.Warnings, "assign: "+err.Error())
+		}
+	}
+	return res, nil
+}
