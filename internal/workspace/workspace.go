@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/slavafyi/cuddle/internal/run"
+	"github.com/slavafyi/huddle/internal/run"
 )
 
 // Kind is where an agent works.

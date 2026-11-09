@@ -1,4 +1,4 @@
-// Package store reads and writes cuddle's JSON cache and state files.
+// Package store reads and writes huddle's JSON cache and state files.
 package store
 
 import (
@@ -86,10 +86,10 @@ func writeFile(path string, data []byte) error {
 	return nil
 }
 
-// CacheDir returns $XDG_CACHE_HOME/cuddle or ~/.cache/cuddle.
+// CacheDir returns $XDG_CACHE_HOME/huddle or ~/.cache/huddle.
 func CacheDir() string { return xdg("XDG_CACHE_HOME", ".cache") }
 
-// StateDir returns $XDG_STATE_HOME/cuddle or ~/.local/state/cuddle.
+// StateDir returns $XDG_STATE_HOME/huddle or ~/.local/state/huddle.
 func StateDir() string { return xdg("XDG_STATE_HOME", ".local/state") }
 
 func xdg(env, fallback string) string {
@@ -98,5 +98,5 @@ func xdg(env, fallback string) string {
 		home, _ := os.UserHomeDir()
 		dir = filepath.Join(home, fallback)
 	}
-	return filepath.Join(dir, "cuddle")
+	return filepath.Join(dir, "huddle")
 }

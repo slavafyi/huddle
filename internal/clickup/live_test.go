@@ -8,13 +8,13 @@ import (
 )
 
 // TestLiveReadOnly checks parsing against the real API. It only reads.
-// Run with: CUDDLE_LIVE=1 CUDDLE_TEAM=... CUDDLE_LEAD_FIELD=... go test -run Live ./internal/clickup -v
+// Run with: HUDDLE_LIVE=1 HUDDLE_TEAM=... HUDDLE_LEAD_FIELD=... go test -run Live ./internal/clickup -v
 func TestLiveReadOnly(t *testing.T) {
-	if os.Getenv("CUDDLE_LIVE") != "1" {
-		t.Skip("set CUDDLE_LIVE=1 to run against the real ClickUp API (read-only)")
+	if os.Getenv("HUDDLE_LIVE") != "1" {
+		t.Skip("set HUDDLE_LIVE=1 to run against the real ClickUp API (read-only)")
 	}
 	c := &HTTP{BaseURL: DefaultBaseURL, Token: os.Getenv("CLICKUP_API_TOKEN"),
-		TeamID: os.Getenv("CUDDLE_TEAM"), LeadFieldID: os.Getenv("CUDDLE_LEAD_FIELD")}
+		TeamID: os.Getenv("HUDDLE_TEAM"), LeadFieldID: os.Getenv("HUDDLE_LEAD_FIELD")}
 	ctx := context.Background()
 	me, err := c.Me(ctx)
 	if err != nil {

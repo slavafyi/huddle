@@ -1,4 +1,4 @@
-# cuddle — spec
+# huddle — spec
 
 A terminal UI, run in a Rex tab, for working on ClickUp tasks and their
 GitHub PRs, and for starting a coding agent on a task in one step.
@@ -96,7 +96,7 @@ On launch, in this order (stop at the first error, no rollback):
 
 ### 4.5 Agents
 
-Tabs cuddle started, with state from Rex program status (Claude Code already
+Tabs huddle started, with state from Rex program status (Claude Code already
 reports it): working, blocked (needs input), done, error, idle.
 
 - Current state on start: `rex block call -b <block> program_status '{}'`.
@@ -128,13 +128,13 @@ Only the 16 ANSI colors plus bold / faint / reverse, so the terminal theme
 
 ## 5. Config and files
 
-- Config: `~/.config/cuddle/config.toml` (workspace ID, lead field ID, repo
+- Config: `~/.config/huddle/config.toml` (workspace ID, lead field ID, repo
   roots, worktree root, scratch root `~/code/agency/notes`, GitHub
   org, branch and prompt templates, agent commands, per-repo base branch).
-- Cache: `~/.cache/cuddle/*.json`. State (agent records, client → session,
-  client → recent repos): `~/.local/state/cuddle/state.json`.
+- Cache: `~/.cache/huddle/*.json`. State (agent records, client → session,
+  client → recent repos): `~/.local/state/huddle/state.json`.
 - Write JSON atomically (temp file + rename).
-- **Token:** env `CLICKUP_API_TOKEN`, else keychain item `cuddle-clickup`.
+- **Token:** env `CLICKUP_API_TOKEN`, else keychain item `huddle-clickup`.
   Never stored in files or logs.
 - **Base branch:** `origin/HEAD`, unless the config overrides it for a repo
   (e.g. `snowcap = "develop"`).
@@ -150,7 +150,7 @@ Only the 16 ANSI colors plus bold / faint / reverse, so the terminal theme
 ## 7. Commands
 
 ```sh
-go run ./cmd/cuddle      # run inside a Rex tab
+go run ./cmd/huddle      # run inside a Rex tab
 go test ./...            # must pass before commit
 go vet ./... && gofmt -l .   # must be clean / print nothing
 ```
@@ -158,7 +158,7 @@ go vet ./... && gofmt -l .   # must be clean / print nothing
 ## 8. Structure
 
 ```
-cmd/cuddle/          main
+cmd/huddle/          main
 internal/clickup/    API client + task rules (§4.1–4.2, pure functions)
 internal/github/     gh calls + PR → task link
 internal/rex/        rex calls + events
@@ -185,7 +185,7 @@ through interfaces, inside `tea.Cmd`.
   other than status / assignee / comment; deleting worktrees or branches.
 - 🚫 **Never:** log or commit the token; move a task to `to review` or later
   without a key press; `git push`, reset or switch branches in my checkout;
-  close Rex tabs cuddle didn't create.
+  close Rex tabs huddle didn't create.
 
 ## 11. Git
 
@@ -209,7 +209,7 @@ One fresh agent session per phase.
 | 8 | PRs view | link tests pass | ✓ |
 
 Live checks (read-only, or throwaway Rex sessions) run with
-`CUDDLE_LIVE=1`, `CUDDLE_REX_LIVE=1` or `CUDDLE_GH_LIVE=1`; see the
+`HUDDLE_LIVE=1`, `HUDDLE_REX_LIVE=1` or `HUDDLE_GH_LIVE=1`; see the
 `live_test.go` files.
 
 ## 13. Phase 0 results (2026-11-09)
@@ -230,17 +230,17 @@ Rex **Remote Control** must be on. If it's off, show a hint.
 
 Decided 2026-11-10.
 
-**Goal:** cuddle works for work (ClickUp) and personal / open-source
+**Goal:** huddle works for work (ClickUp) and personal / open-source
 (GitHub issues) without mixing them, with a short config.
 
 ### 14.1 Profiles
 
 - A profile is one named world: its sources, GitHub account, cache and
   Rex sessions. Only one profile is shown at a time.
-- The header shows the current one after the title: `cuddle · work`. The
-  Rex tab title is `CUddle · work`.
+- The header shows the current one after the title: `huddle · work`. The
+  Rex tab title is `Huddle · work`.
 - `P` opens a picker: type to filter, `enter` switches, `1–9` jump, most
-  recently used first. `cuddle -p personal` starts in a profile; without
+  recently used first. `huddle -p personal` starts in a profile; without
   `-p`, the last used one.
 - Each source keeps its own status words. No shared "stages" to map.
 
@@ -263,7 +263,7 @@ github_account = "slavafyi"
   that profile. A profile without `github_orgs` gets every other issue
   and PR assigned to or opened by its account (any repo, open-source too).
   No repo lists.
-- **`github_account`:** cuddle calls `gh` with that account's token
+- **`github_account`:** huddle calls `gh` with that account's token
   (`gh auth token --user NAME`), so `gh auth switch` elsewhere doesn't
   change what a profile shows. Each profile can use a different account.
 - **ClickUp auto-detect** (checked 2026-11-10): the workspace is the only
@@ -279,7 +279,7 @@ github_account = "slavafyi"
 - Today: **In progress** (has an agent tab or my open PR), **Open**,
   **In review** (open PR waiting), **Done this week** (closed ≤ 7 days).
 - Tasks: filters **Assigned** / **Opened by me**.
-- Start panel: the repo is known, so no repo picker; cuddle finds the
+- Start panel: the repo is known, so no repo picker; huddle finds the
   local clone by its git remote. Branch `feature/{number}-{slug}`, Rex
   session named after the repo, no "Move to" row.
 - PRs link to issues by "Fixes #42" or the issue number in the branch.

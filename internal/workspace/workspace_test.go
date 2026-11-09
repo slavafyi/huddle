@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/slavafyi/cuddle/internal/run"
+	"github.com/slavafyi/huddle/internal/run"
 )
 
 func TestSlug(t *testing.T) {

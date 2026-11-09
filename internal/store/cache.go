@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
-	"github.com/slavafyi/cuddle/internal/github"
-	"github.com/slavafyi/cuddle/internal/workspace"
+	"github.com/slavafyi/huddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/github"
+	"github.com/slavafyi/huddle/internal/workspace"
 )
 
 // CacheVersion is the current cache file format.

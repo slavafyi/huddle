@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/clickup"
 )
 
 // taskView is the Tasks tab.

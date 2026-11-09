@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
-	"github.com/slavafyi/cuddle/internal/rex"
-	"github.com/slavafyi/cuddle/internal/run"
-	"github.com/slavafyi/cuddle/internal/workspace"
+	"github.com/slavafyi/huddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/rex"
+	"github.com/slavafyi/huddle/internal/run"
+	"github.com/slavafyi/huddle/internal/workspace"
 )
 
 // noFocus is the real rex CLI without Focus, so the test does not switch
@@ -21,17 +21,17 @@ func (noFocus) Focus(context.Context, string, string) error { return nil }
 
 // TestLiveLaunch starts two shell tabs in a throwaway client session with
 // the real rex CLI and a fake ClickUp, then removes the session.
-// Run with: CUDDLE_REX_LIVE=1 go test -run LiveLaunch ./internal/launch -v
+// Run with: HUDDLE_REX_LIVE=1 go test -run LiveLaunch ./internal/launch -v
 func TestLiveLaunch(t *testing.T) {
-	if os.Getenv("CUDDLE_REX_LIVE") != "1" {
-		t.Skip("set CUDDLE_REX_LIVE=1 to run against the local Rex server")
+	if os.Getenv("HUDDLE_REX_LIVE") != "1" {
+		t.Skip("set HUDDLE_REX_LIVE=1 to run against the local Rex server")
 	}
 	ctx := context.Background()
 	rx := &rex.CLI{Runner: run.Exec{}}
 	cu := &fakeCU{}
 	d := Deps{Runner: run.Exec{}, Rex: noFocus{rx}, ClickUp: cu, Now: time.Now}
 	root := t.TempDir()
-	tk := clickup.Task{ID: "x1", CustomID: "TEST-1", Name: "Live launch check", ListName: "cuddle-live-client"}
+	tk := clickup.Task{ID: "x1", CustomID: "TEST-1", Name: "Live launch check", ListName: "huddle-live-client"}
 	p := Plan{Task: tk, TabName: "TEST-1 Live launch check",
 		Workspace: workspace.Plan{Kind: workspace.Scratch, ScratchRoot: root, TaskKey: "test-1", Slug: "live-launch-check"}}
 
@@ -44,7 +44,7 @@ func TestLiveLaunch(t *testing.T) {
 		t.Fatal("scratch folder missing")
 	}
 	ss, _ := rx.Sessions(ctx)
-	if ss[first.Agent.SessionID] != "cuddle-live-client" {
+	if ss[first.Agent.SessionID] != "huddle-live-client" {
 		t.Fatalf("session label = %q", ss[first.Agent.SessionID])
 	}
 

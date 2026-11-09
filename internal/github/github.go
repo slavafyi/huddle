@@ -10,8 +10,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
-	"github.com/slavafyi/cuddle/internal/run"
+	"github.com/slavafyi/huddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/run"
 )
 
 // Kind says why a PR is listed.
@@ -43,7 +43,7 @@ type PR struct {
 	Kind     Kind      `json:"kind"`
 }
 
-// Client is what cuddle needs from GitHub.
+// Client is what huddle needs from GitHub.
 type Client interface {
 	PRs(ctx context.Context, now time.Time) ([]PR, error)
 }

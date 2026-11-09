@@ -1,4 +1,4 @@
-// Package ui is cuddle's Bubble Tea interface. It never runs commands or
+// Package ui is huddle's Bubble Tea interface. It never runs commands or
 // HTTP itself: it calls the interfaces in Deps inside tea.Cmds.
 package ui
 
@@ -11,13 +11,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
-	"github.com/slavafyi/cuddle/internal/config"
-	"github.com/slavafyi/cuddle/internal/github"
-	"github.com/slavafyi/cuddle/internal/rex"
-	"github.com/slavafyi/cuddle/internal/run"
-	"github.com/slavafyi/cuddle/internal/store"
-	"github.com/slavafyi/cuddle/internal/workspace"
+	"github.com/slavafyi/huddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/config"
+	"github.com/slavafyi/huddle/internal/github"
+	"github.com/slavafyi/huddle/internal/rex"
+	"github.com/slavafyi/huddle/internal/run"
+	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/workspace"
 )
 
 // Tab is one of the four views.
@@ -54,7 +54,7 @@ type Deps struct {
 	CachePath string
 	StatePath string
 	Now       func() time.Time
-	// HomeSession is the Rex session cuddle runs in, for opening diffs.
+	// HomeSession is the Rex session huddle runs in, for opening diffs.
 	HomeSession string
 	// Watch starts the Rex event stream. Nil disables live events.
 	Watch func(ctx context.Context) (<-chan rex.Event, error)
@@ -476,7 +476,7 @@ func (a *App) runCmd(c run.Cmd) tea.Cmd {
 func (a *App) View() tea.View {
 	v := tea.NewView(a.Render())
 	v.AltScreen = true
-	v.WindowTitle = "CUddle"
+	v.WindowTitle = "Huddle"
 	return v
 }
 
@@ -576,7 +576,7 @@ func (a *App) viewParts() (sub string, body func(h int) string, detail []string)
 			detail = prDetail(p)
 		}
 	case TabAgents:
-		sub = sFaint.Render(plural(len(a.state.Agents), "agent") + " started by cuddle")
+		sub = sFaint.Render(plural(len(a.state.Agents), "agent") + " started by huddle")
 		body = func(h int) string { return a.agents.list.render(a.bodyWidth(), h) }
 		if ag, ok := a.selectedAgent(); ok {
 			detail = agentDetail(ag, a.agentInfo[ag.BlockID])
@@ -604,7 +604,7 @@ func (a *App) tabBar() string {
 		}
 	}
 	left := strings.Join(parts, "   ")
-	right := a.counters() + a.syncLabel() + "  " + sBold.Render("cuddle")
+	right := a.counters() + a.syncLabel() + "  " + sBold.Render("huddle")
 	gap := a.width - ansi.StringWidth(left) - ansi.StringWidth(right)
 	return left + strings.Repeat(" ", max(1, gap)) + right
 }

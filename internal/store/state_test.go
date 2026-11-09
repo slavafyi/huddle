@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/slavafyi/cuddle/internal/rex"
+	"github.com/slavafyi/huddle/internal/rex"
 )
 
 func TestRememberRepo(t *testing.T) {

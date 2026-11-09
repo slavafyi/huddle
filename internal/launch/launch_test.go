@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
-	"github.com/slavafyi/cuddle/internal/rex"
-	"github.com/slavafyi/cuddle/internal/run"
-	"github.com/slavafyi/cuddle/internal/workspace"
+	"github.com/slavafyi/huddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/rex"
+	"github.com/slavafyi/huddle/internal/run"
+	"github.com/slavafyi/huddle/internal/workspace"
 )
 
 type fakeRex struct {

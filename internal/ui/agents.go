@@ -8,8 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/slavafyi/cuddle/internal/rex"
-	"github.com/slavafyi/cuddle/internal/store"
+	"github.com/slavafyi/huddle/internal/rex"
+	"github.com/slavafyi/huddle/internal/store"
 )
 
 // agentInfo is what Rex says about an agent's tab.

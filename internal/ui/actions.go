@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/clickup"
 )
 
 // mode is what keys currently go to.

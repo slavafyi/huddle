@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/slavafyi/cuddle/internal/run"
+	"github.com/slavafyi/huddle/internal/run"
 )
 
 func TestLoadMissingFileGivesDefaults(t *testing.T) {
@@ -22,7 +22,7 @@ func TestLoadMissingFileGivesDefaults(t *testing.T) {
 	if c.PromptTemplate != "Take a task {id} from CU" {
 		t.Errorf("prompt template = %q", c.PromptTemplate)
 	}
-	if c.WorktreeRoot != "/home/u/.local/share/cuddle/worktrees" {
+	if c.WorktreeRoot != "/home/u/.local/share/huddle/worktrees" {
 		t.Errorf("worktree root = %q", c.WorktreeRoot)
 	}
 	if got := c.AgentNames(); len(got) != 3 || got[0] != "claude" || got[2] != "shell" {
@@ -91,7 +91,7 @@ func TestTokenFromEnv(t *testing.T) {
 
 func TestTokenFromKeychain(t *testing.T) {
 	t.Setenv("CLICKUP_API_TOKEN", "")
-	f := &run.Fake{Responses: []run.Response{{Match: "security find-generic-password -s cuddle-clickup -w", Out: "pk_kc\n"}}}
+	f := &run.Fake{Responses: []run.Response{{Match: "security find-generic-password -s huddle-clickup -w", Out: "pk_kc\n"}}}
 	tok, err := Token(context.Background(), f)
 	if err != nil || tok != "pk_kc" {
 		t.Fatalf("got %q, %v", tok, err)

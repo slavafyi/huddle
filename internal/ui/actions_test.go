@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/clickup"
 )
 
 var listStatuses = []clickup.Status{

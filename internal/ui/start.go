@@ -12,11 +12,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
-	"github.com/slavafyi/cuddle/internal/launch"
-	"github.com/slavafyi/cuddle/internal/rex"
-	"github.com/slavafyi/cuddle/internal/store"
-	"github.com/slavafyi/cuddle/internal/workspace"
+	"github.com/slavafyi/huddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/launch"
+	"github.com/slavafyi/huddle/internal/rex"
+	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/workspace"
 )
 
 // panelWidth is the Start panel's width, border included.

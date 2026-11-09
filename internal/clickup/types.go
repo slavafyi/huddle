@@ -14,7 +14,7 @@ type User struct {
 	Username string `json:"username"`
 }
 
-// Task is the part of a ClickUp task cuddle uses. Zero times mean "not set".
+// Task is the part of a ClickUp task huddle uses. Zero times mean "not set".
 type Task struct {
 	ID          string    `json:"id"`
 	CustomID    string    `json:"custom_id,omitempty"`
@@ -71,7 +71,7 @@ type Status struct {
 	Order int    `json:"orderindex"`
 }
 
-// Client is what the rest of cuddle needs from ClickUp.
+// Client is what the rest of huddle needs from ClickUp.
 type Client interface {
 	Me(ctx context.Context) (User, error)
 	// MyTasks returns tasks assigned to me or where I'm lead. A zero since

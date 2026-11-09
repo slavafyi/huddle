@@ -3,7 +3,7 @@ package store
 import (
 	"time"
 
-	"github.com/slavafyi/cuddle/internal/rex"
+	"github.com/slavafyi/huddle/internal/rex"
 )
 
 // StateVersion is the current state file format.
@@ -12,7 +12,7 @@ const StateVersion = 1
 // maxRecentRepos is how many repos are remembered per client.
 const maxRecentRepos = 5
 
-// Agent is a tab cuddle started for a task.
+// Agent is a tab huddle started for a task.
 type Agent struct {
 	TaskID    string `json:"task_id"`
 	TaskKey   string `json:"task_key"`
@@ -27,7 +27,7 @@ type Agent struct {
 	Started time.Time `json:"started"`
 }
 
-// State is what cuddle remembers between runs. Unlike the cache, it is not
+// State is what huddle remembers between runs. Unlike the cache, it is not
 // safe to delete: it links tasks to Rex tabs.
 type State struct {
 	Version        int                 `json:"version"`

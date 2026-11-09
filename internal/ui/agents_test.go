@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/slavafyi/cuddle/internal/rex"
-	"github.com/slavafyi/cuddle/internal/store"
+	"github.com/slavafyi/huddle/internal/rex"
+	"github.com/slavafyi/huddle/internal/store"
 )
 
 func agentsEnv(t *testing.T) *testEnv {

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/slavafyi/cuddle/internal/run"
+	"github.com/slavafyi/huddle/internal/run"
 )
 
 func TestNewSession(t *testing.T) {
@@ -141,7 +141,7 @@ func TestCloseAndLastLine(t *testing.T) {
 
 // Lines captured from `rex events --all --json` on 2026-11-09.
 const (
-	evStatus = `{"type":"session_event","payload":{"session_id":"session:S","event":{"type":"block_event","payload":{"block_id":"block:B","creator_name":"com.superlogical.terminal","name":"program_status_changed","payload":{"id":"","record":{"state":"blocked","app":"cuddletest","effective_app":"cuddletest","msg":"Need input","updated_at":"2026-11-09T13:52:57.361527+00:00","owner":{"pid":68928,"name":"bash"}},"reason":"report"}}}}}`
+	evStatus = `{"type":"session_event","payload":{"session_id":"session:S","event":{"type":"block_event","payload":{"block_id":"block:B","creator_name":"com.superlogical.terminal","name":"program_status_changed","payload":{"id":"","record":{"state":"blocked","app":"huddletest","effective_app":"huddletest","msg":"Need input","updated_at":"2026-11-09T13:52:57.361527+00:00","owner":{"pid":68928,"name":"bash"}},"reason":"report"}}}}}`
 	evChild  = `{"type":"session_event","payload":{"session_id":"session:S","event":{"type":"block_event","payload":{"block_id":"block:B","creator_name":"com.superlogical.terminal","name":"program_status_changed","payload":{"id":"build","record":{"state":"working"},"reason":"report"}}}}}`
 	evClosed = `{"type":"session_event","payload":{"session_id":"session:S","event":{"type":"block_closed","payload":{"block_id":"block:B"}}}}`
 	evOther  = `{"type":"client_joined","payload":{}}`

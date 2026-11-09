@@ -1,4 +1,4 @@
-module github.com/slavafyi/cuddle
+module github.com/slavafyi/huddle
 
 go 1.26.1
 

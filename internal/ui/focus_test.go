@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/slavafyi/cuddle/internal/rex"
-	"github.com/slavafyi/cuddle/internal/store"
+	"github.com/slavafyi/huddle/internal/rex"
+	"github.com/slavafyi/huddle/internal/store"
 )
 
 func withAgent(e *testEnv, taskID, block string) {

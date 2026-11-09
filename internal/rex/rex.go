@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/slavafyi/cuddle/internal/run"
+	"github.com/slavafyi/huddle/internal/run"
 )
 
 // Placement is where a new tab opened.
@@ -33,7 +33,7 @@ type Status struct {
 // because Remote Control is off.
 var ErrRemoteControl = errors.New("turn on Remote Control in Rex settings to jump to tabs")
 
-// Client is what cuddle needs from Rex.
+// Client is what huddle needs from Rex.
 type Client interface {
 	Sessions(ctx context.Context) (map[string]string, error)
 	NewSession(ctx context.Context, name, dir, window string, argv []string) (Placement, error)

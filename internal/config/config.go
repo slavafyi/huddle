@@ -1,4 +1,4 @@
-// Package config loads cuddle's config file and the ClickUp token.
+// Package config loads huddle's config file and the ClickUp token.
 package config
 
 import (
@@ -12,10 +12,10 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/slavafyi/cuddle/internal/run"
+	"github.com/slavafyi/huddle/internal/run"
 )
 
-// Config is the user config from ~/.config/cuddle/config.toml.
+// Config is the user config from ~/.config/huddle/config.toml.
 type Config struct {
 	WorkspaceID      string              `toml:"workspace_id"`
 	LeadFieldID      string              `toml:"lead_field_id"`
@@ -44,7 +44,7 @@ const ShellAgent = "shell"
 func Default() Config {
 	home, _ := os.UserHomeDir()
 	return Config{
-		WorktreeRoot:     filepath.Join(home, ".local/share/cuddle/worktrees"),
+		WorktreeRoot:     filepath.Join(home, ".local/share/huddle/worktrees"),
 		ScratchRoot:      filepath.Join(home, "research"),
 		BranchTemplate:   "feature/{id_lower}-{slug}",
 		PromptTemplate:   "Take a task {id} from CU",
@@ -65,7 +65,7 @@ func Path() string {
 		home, _ := os.UserHomeDir()
 		dir = filepath.Join(home, ".config")
 	}
-	return filepath.Join(dir, "cuddle", "config.toml")
+	return filepath.Join(dir, "huddle", "config.toml")
 }
 
 // Load reads path over the defaults. A missing file is not an error.
@@ -139,14 +139,14 @@ func ExpandHome(p string) string {
 }
 
 // Token returns the ClickUp API token from CLICKUP_API_TOKEN or the macOS
-// keychain item "cuddle-clickup". The token is never logged.
+// keychain item "huddle-clickup". The token is never logged.
 func Token(ctx context.Context, r run.Runner) (string, error) {
 	if t := strings.TrimSpace(os.Getenv("CLICKUP_API_TOKEN")); t != "" {
 		return t, nil
 	}
-	out, err := r.Run(ctx, run.Cmd{Name: "security", Args: []string{"find-generic-password", "-s", "cuddle-clickup", "-w"}})
+	out, err := r.Run(ctx, run.Cmd{Name: "security", Args: []string{"find-generic-password", "-s", "huddle-clickup", "-w"}})
 	if t := strings.TrimSpace(string(out)); err == nil && t != "" {
 		return t, nil
 	}
-	return "", errors.New("no ClickUp token: set CLICKUP_API_TOKEN or add keychain item cuddle-clickup")
+	return "", errors.New("no ClickUp token: set CLICKUP_API_TOKEN or add keychain item huddle-clickup")
 }

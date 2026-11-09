@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/clickup"
 )
 
 // todayView is the Today tab.

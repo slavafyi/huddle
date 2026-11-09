@@ -9,10 +9,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
-	"github.com/slavafyi/cuddle/internal/github"
-	"github.com/slavafyi/cuddle/internal/store"
-	"github.com/slavafyi/cuddle/internal/workspace"
+	"github.com/slavafyi/huddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/github"
+	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/workspace"
 )
 
 // prsEvery is how often PRs refresh (SPEC §4.7).
@@ -151,7 +151,7 @@ func (a *App) prKey(k string) tea.Cmd {
 			return nil
 		}
 		if a.deps.HomeSession == "" {
-			a.flash = sYellow.Render("run cuddle inside Rex to open diffs in a tab")
+			a.flash = sYellow.Render("run huddle inside Rex to open diffs in a tab")
 			return nil
 		}
 		rx, session := a.deps.Rex, a.deps.HomeSession

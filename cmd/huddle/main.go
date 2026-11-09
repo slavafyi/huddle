@@ -1,4 +1,4 @@
-// Command cuddle is a terminal UI for ClickUp tasks, GitHub PRs and coding
+// Command huddle is a terminal UI for ClickUp tasks, GitHub PRs and coding
 // agents in Rex.
 package main
 
@@ -9,18 +9,18 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
-	"github.com/slavafyi/cuddle/internal/config"
-	"github.com/slavafyi/cuddle/internal/github"
-	"github.com/slavafyi/cuddle/internal/rex"
-	"github.com/slavafyi/cuddle/internal/run"
-	"github.com/slavafyi/cuddle/internal/store"
-	"github.com/slavafyi/cuddle/internal/ui"
+	"github.com/slavafyi/huddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/config"
+	"github.com/slavafyi/huddle/internal/github"
+	"github.com/slavafyi/huddle/internal/rex"
+	"github.com/slavafyi/huddle/internal/run"
+	"github.com/slavafyi/huddle/internal/store"
+	"github.com/slavafyi/huddle/internal/ui"
 )
 
 func main() {
 	if err := runApp(); err != nil {
-		fmt.Fprintln(os.Stderr, "cuddle:", err)
+		fmt.Fprintln(os.Stderr, "huddle:", err)
 		os.Exit(1)
 	}
 }

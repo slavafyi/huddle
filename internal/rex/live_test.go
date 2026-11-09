@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/slavafyi/cuddle/internal/run"
+	"github.com/slavafyi/huddle/internal/run"
 )
 
 // TestLiveRex runs the real rex CLI in a throwaway session and removes it.
-// Run with: CUDDLE_REX_LIVE=1 go test -run LiveRex ./internal/rex -v
+// Run with: HUDDLE_REX_LIVE=1 go test -run LiveRex ./internal/rex -v
 func TestLiveRex(t *testing.T) {
-	if os.Getenv("CUDDLE_REX_LIVE") != "1" {
-		t.Skip("set CUDDLE_REX_LIVE=1 to run against the local Rex server")
+	if os.Getenv("HUDDLE_REX_LIVE") != "1" {
+		t.Skip("set HUDDLE_REX_LIVE=1 to run against the local Rex server")
 	}
 	ctx := context.Background()
 	c := &CLI{Runner: run.Exec{}}
@@ -24,14 +24,14 @@ func TestLiveRex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := c.NewSession(ctx, "cuddle-live-test", dir, "first tab", []string{"sh", "-c", report})
+	p, err := c.NewSession(ctx, "huddle-live-test", dir, "first tab", []string{"sh", "-c", report})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { run.Exec{}.Run(ctx, run.Cmd{Name: "rex", Args: []string{"kill", p.SessionID}}) })
 
 	ss, err := c.Sessions(ctx)
-	if err != nil || ss[p.SessionID] != "cuddle-live-test" {
+	if err != nil || ss[p.SessionID] != "huddle-live-test" {
 		t.Fatalf("sessions: %v %v", ss[p.SessionID], err)
 	}
 	w, err := c.NewWindow(ctx, p.SessionID, "second tab", dir, nil)

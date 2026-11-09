@@ -5,7 +5,7 @@ import (
 )
 
 // Only the 16 ANSI colors plus bold, faint and reverse are used, so the
-// terminal theme decides how cuddle looks in light and dark mode.
+// terminal theme decides how huddle looks in light and dark mode.
 var (
 	sBold    = lipgloss.NewStyle().Bold(true)
 	sFaint   = lipgloss.NewStyle().Faint(true)

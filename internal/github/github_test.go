@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/slavafyi/cuddle/internal/clickup"
-	"github.com/slavafyi/cuddle/internal/run"
+	"github.com/slavafyi/huddle/internal/clickup"
+	"github.com/slavafyi/huddle/internal/run"
 )
 
 const reply = `{"data": {

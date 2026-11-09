@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/slavafyi/cuddle/internal/run"
-	"github.com/slavafyi/cuddle/internal/workspace"
+	"github.com/slavafyi/huddle/internal/run"
+	"github.com/slavafyi/huddle/internal/workspace"
 )
 
 func TestEnterOpensStartPanelWithDefaults(t *testing.T) {

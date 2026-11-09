@@ -16,7 +16,7 @@ type Group struct {
 	Tasks []Task
 }
 
-// Relevant reports whether a task belongs in cuddle: I'm an assignee or the
+// Relevant reports whether a task belongs in huddle: I'm an assignee or the
 // lead, and it is open or was done in the last 7 days.
 func Relevant(t Task, me int64, now time.Time) bool {
 	if !t.AssignedTo(me) && !t.LeadIs(me) {
