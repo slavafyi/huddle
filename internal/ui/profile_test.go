@@ -179,3 +179,27 @@ func TestProfilePickerLayout(t *testing.T) {
 		t.Errorf("summaries not right-aligned: %q", p)
 	}
 }
+
+func TestBacktickSwitchesToPreviousProfile(t *testing.T) {
+	e := withProfiles(t)
+	_, cmd := e.app.Update(key("`"))
+	if e.app.SwitchTo() != "personal" || cmd == nil {
+		t.Errorf("switch = %q", e.app.SwitchTo())
+	}
+}
+
+func TestBacktickWithoutOtherProfile(t *testing.T) {
+	e := withProfiles(t)
+	d := e.app.deps
+	d.Recent = []string{"work"}
+	d.Profiles = d.Profiles[:1]
+	e.app = NewApp(d)
+	e.app.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	if _, cmd := e.app.Update(key("`")); cmd != nil || e.app.SwitchTo() != "" || !strings.Contains(plain(e), "no other profile") {
+		t.Errorf("switch = %q\n%s", e.app.SwitchTo(), plain(e))
+	}
+	e.press("?")
+	if !strings.Contains(plain(e), "`            last profile") {
+		t.Errorf("help:\n%s", plain(e))
+	}
+}

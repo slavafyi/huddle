@@ -91,6 +91,17 @@ func (a *App) profileKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
+// previousProfile is the most recently used profile other than the
+// current one that still exists, or "".
+func (a *App) previousProfile() string {
+	for _, p := range recentFirst(a.deps.Profiles, a.deps.Recent) {
+		if p.Name != a.deps.Profile && slices.Contains(a.deps.Recent, p.Name) {
+			return p.Name
+		}
+	}
+	return ""
+}
+
 // switchProfile ends the program so main can start it again in another
 // profile. Picking the current profile only closes the picker.
 func (a *App) switchProfile(name string) tea.Cmd {

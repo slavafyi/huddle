@@ -32,6 +32,7 @@ var (
 		{"tab / 1–4", "switch view"},
 		{"r", "refresh"},
 		{"P", "switch profile"},
+		{"`", "last profile"},
 		{"?", "keys"},
 		{"q", "quit"},
 	}

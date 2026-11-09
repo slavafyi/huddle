@@ -452,6 +452,12 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case "P":
 		a.openProfilePicker()
 		return nil
+	case "`":
+		if prev := a.previousProfile(); prev != "" {
+			return a.switchProfile(prev)
+		}
+		a.flash = sFaint.Render("no other profile")
+		return nil
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		if i := int(k[0] - '1'); i < len(a.tabs) {
 			a.setTab(i)
