@@ -87,7 +87,7 @@ type App struct {
 	opID      uint64
 	completed uint64
 	launching map[string]bool
-	lastStart *startPanel
+	lastStart map[string]*startPanel // by task ID, while that launch runs
 
 	writer  *store.Writer
 	saveGen uint64
@@ -133,7 +133,7 @@ func NewApp(d Deps) *App {
 	}
 	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView(), today: newTodayView(), agents: newAgentView(), prs: newPRView(),
 		statuses: map[string][]clickup.Status{}, agentInfo: map[string]agentInfo{},
-		ops: map[uint64]*op{}, launching: map[string]bool{}, writer: &store.Writer{}}
+		ops: map[uint64]*op{}, launching: map[string]bool{}, lastStart: map[string]*startPanel{}, writer: &store.Writer{}}
 	a.state = d.State
 	a.applyCache(d.Cache)
 	return a
@@ -373,6 +373,14 @@ func (a *App) taskAction(k string) tea.Cmd {
 	t, ok := a.selectedTask()
 	if !ok {
 		return nil
+	}
+	// Acting on a row pins the cursor to it, so it follows the task when
+	// the task moves to another group.
+	switch a.tab {
+	case TabTasks:
+		a.tasks.list.touched = true
+	case TabToday:
+		a.today.list.touched = true
 	}
 	switch k {
 	case "o":

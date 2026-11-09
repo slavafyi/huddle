@@ -318,7 +318,11 @@ func (a *App) launch() tea.Cmd {
 		a.flash = sRed.Render(problem)
 		return nil
 	}
-	a.lastStart = a.start
+	if a.launching[lp.Task.ID] {
+		a.flash = sYellow.Render("already starting " + lp.Task.Key() + "…")
+		return nil
+	}
+	a.lastStart[lp.Task.ID] = a.start
 	a.mode, a.start = modeNormal, nil
 	a.launching[lp.Task.ID] = true
 	a.flash = sFaint.Render("starting " + lp.Task.Key() + "…")
@@ -334,15 +338,17 @@ func (a *App) launch() tea.Cmd {
 // onOpened records the agent as soon as its tab exists (SPEC §4.4 step 3),
 // then starts the ClickUp writes (step 4).
 func (a *App) onOpened(m openedMsg) tea.Cmd {
-	delete(a.launching, m.plan.Task.ID)
+	id := m.plan.Task.ID
+	panel := a.lastStart[id]
+	delete(a.launching, id)
+	delete(a.lastStart, id)
 	if m.err != nil {
-		a.flash = sRed.Render(m.err.Error())
-		if a.mode == modeNormal && a.lastStart != nil {
-			a.start, a.mode = a.lastStart, modeStart // keep the panel's edits
+		a.flash = sRed.Render(m.plan.Task.Key() + ": " + m.err.Error())
+		if a.mode == modeNormal && panel != nil {
+			a.start, a.mode = panel, modeStart // this task's panel, with its edits
 		}
 		return nil
 	}
-	a.lastStart = nil
 	ag := m.res.Agent
 	a.state.AddAgent(ag)
 	a.agentInfo[ag.BlockID] = agentInfo{known: true, alive: true}
@@ -364,10 +370,10 @@ func (a *App) onOpened(m openedMsg) tea.Cmd {
 		if !ok {
 			st = clickup.Status{Name: p.SetStatus, Type: cur.StatusType, Order: cur.StatusOrder}
 		}
-		statusOp = a.newOp(t.ID, setStatus(st, a.now()), setStatus(clickup.Status{Name: cur.Status, Type: cur.StatusType, Order: cur.StatusOrder}, cur.Done))
+		statusOp = a.newOp(t.ID, "status", setStatus(st, a.now()), setStatus(clickup.Status{Name: cur.Status, Type: cur.StatusType, Order: cur.StatusOrder}, cur.Done))
 	}
 	if p.AssignMe != 0 {
-		assignOp = a.newOp(t.ID, setAssigned(a.cache.Me, true), setAssigned(a.cache.Me, false))
+		assignOp = a.newOp(t.ID, "assign", setAssigned(a.cache.Me, true), setAssigned(a.cache.Me, false))
 	}
 	if statusOp != 0 || assignOp != 0 {
 		cu := a.deps.ClickUp

@@ -103,7 +103,7 @@ func (a *App) applyStatus(s clickup.Status) tea.Cmd {
 	if !ok || t.Status == s.Name {
 		return nil
 	}
-	id := a.newOp(t.ID, setStatus(s, a.now()), setStatus(clickup.Status{Name: t.Status, Type: t.StatusType, Order: t.StatusOrder}, t.Done))
+	id := a.newOp(t.ID, "status", setStatus(s, a.now()), setStatus(clickup.Status{Name: t.Status, Type: t.StatusType, Order: t.StatusOrder}, t.Done))
 	cu := a.deps.ClickUp
 	return a.write(id, fmt.Sprintf("%s → %s", t.Key(), s.Name), func(ctx context.Context) error {
 		return cu.SetStatus(ctx, t.ID, s.Name)
@@ -142,7 +142,7 @@ func setAssigned(me clickup.User, on bool) func(*clickup.Task) {
 func (a *App) toggleAssign(t clickup.Task) tea.Cmd {
 	me := a.cache.Me
 	add := !t.AssignedTo(me.ID)
-	id := a.newOp(t.ID, setAssigned(me, add), setAssigned(me, !add))
+	id := a.newOp(t.ID, "assign", setAssigned(me, add), setAssigned(me, !add))
 	msg := t.Key() + ": assigned to you"
 	if !add {
 		msg = t.Key() + ": unassigned you"

@@ -232,3 +232,62 @@ func TestCleanupTreatsUnknownStateAsAlive(t *testing.T) {
 }
 
 var _ = github.Merged
+
+func TestFailedLaunchReopensOnlyItsOwnPanel(t *testing.T) {
+	e := newEnv(t)
+	e.runner.Responses = []run.Response{{Match: "git -C /r/snowcap fetch", Err: errors.New("offline")}}
+	e.load(t)
+	selectTask(t, e, "t2") // A: worktree in snowcap, will fail
+	e.press("enter")
+	_, launchA := e.app.Update(key("ctrl+s"))
+	selectTask(t, e, "t4") // B: scratch
+	e.press("enter")
+	_, launchB := e.app.Update(key("ctrl+s"))
+	_ = launchB
+	e.app.Update(launchA()) // A fails while B is still starting
+	if e.app.mode != modeStart || e.app.start == nil || e.app.start.task.ID != "t2" {
+		t.Fatalf("wrong panel reopened: %+v", e.app.start)
+	}
+}
+
+func TestLaunchGuardInPanel(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t4")
+	e.press("enter")
+	e.app.Update(key("ctrl+s")) // still running
+	e.app.launching["t4"] = true
+	e.app.openStart(e.app.cache.Tasks[3])
+	if cmd := e.app.launch(); cmd != nil {
+		t.Error("second launch of the same task allowed from the panel")
+	}
+}
+
+func TestFailedOlderStatusWriteKeepsNewerChange(t *testing.T) {
+	e := newEnv(t)
+	e.cu.statuses = listStatuses
+	e.load(t)
+	selectTask(t, e, "t2") // to start
+	e.press("s")
+	_, first := e.app.Update(key("3")) // → in progress, pending
+	e.press("s")
+	_, second := e.app.Update(key("4")) // → to review, pending
+	e.cu.writeErr = errors.New("500")
+	e.run(first) // older write fails
+	if s := status(e, "t2"); s != "to review" {
+		t.Errorf("failed older write hid the newer change: %q", s)
+	}
+	_ = second
+}
+
+func TestCursorFollowsTaskAfterStatusChange(t *testing.T) {
+	e := newEnv(t)
+	e.cu.statuses = listStatuses
+	e.load(t)
+	e.press("2") // first row, cursor never moved
+	r, _ := e.app.tasks.list.selected()
+	e.press("s", "4") // the task moves to another group
+	if got, _ := e.app.tasks.list.selected(); got.key != r.key {
+		t.Errorf("cursor left the task: %s → %s", r.key, got.key)
+	}
+}

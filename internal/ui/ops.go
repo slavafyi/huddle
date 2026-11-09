@@ -16,6 +16,7 @@ import (
 // the write finished has come back, so an older refresh can't undo it.
 type op struct {
 	taskID string
+	field  string // "status" or "assign"
 	apply  func(*clickup.Task)
 	undo   func(*clickup.Task)
 	done   bool
@@ -23,9 +24,9 @@ type op struct {
 }
 
 // newOp applies a change on screen at once and remembers it.
-func (a *App) newOp(taskID string, apply, undo func(*clickup.Task)) uint64 {
+func (a *App) newOp(taskID, field string, apply, undo func(*clickup.Task)) uint64 {
 	a.opID++
-	a.ops[a.opID] = &op{taskID: taskID, apply: apply, undo: undo}
+	a.ops[a.opID] = &op{taskID: taskID, field: field, apply: apply, undo: undo}
 	a.editTask(taskID, apply)
 	return a.opID
 }
@@ -38,12 +39,23 @@ func (a *App) finishOp(id uint64, ok bool) {
 		return
 	}
 	if !ok {
-		a.editTask(o.taskID, o.undo)
 		delete(a.ops, id)
+		if !a.newerOp(o, id) { // a later change to the same field wins
+			a.editTask(o.taskID, o.undo)
+		}
 		return
 	}
 	a.completed++
 	o.done, o.doneAt = true, a.completed
+}
+
+func (a *App) newerOp(o *op, id uint64) bool {
+	for other, p := range a.ops {
+		if other > id && p.taskID == o.taskID && p.field == o.field {
+			return true
+		}
+	}
+	return false
 }
 
 // reapplyOps puts pending changes back over fresh data from a refresh that
