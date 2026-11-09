@@ -471,3 +471,59 @@ them into Today (the "Open" group) is noise.
 1. **Built.** Theme fixes (§15.3), folded into §4.8 and §5.
 2. **Built.** Tabs per source and Today = main source (§4.2). Cache
    version 4 (issue labels). Issues show UPDATED age, not created age.
+
+## 16. Start panel, more agents, profile toggle (planned)
+
+Decided 2026-11-09. When built,
+fold into §4.4, §5 and the key list.
+
+### 16.1 Start panel
+
+- Box titled `Start`, 54 columns. Top: `{id} {title}` (title bold), then
+  `{project} · {status}`.
+- Three sections, each a faint rule `WHERE ───`, `AGENT ───`,
+  `PROMPT ───`, with a blank line before each:
+  - **WHERE:** `Rex  {session} › new tab` (faint "· session created" when
+    missing) first, then rows with a 10-column label: `Workspace` (radios
+    on the same row), `Repo` (current repo, faint `+N · type to filter`;
+    while focused and typing, a list of up to 4 matches opens under it),
+    `Branch` (worktree only), `Folder` (scratch only).
+  - **AGENT:** all agents as radios, 3 per row.
+  - **PROMPT:** 4 lines tall, wraps; longer text scrolls to keep the end.
+    Then the `[x] Move to …` / `[x] Assign to me` rows.
+- Bottom: `Launch ⏎` and faint `esc cancel`.
+- Keys unchanged: `tab` / `shift+tab` move, `space` / `←→` change,
+  `enter` launches.
+- Workspace default: **checkout** (was worktree); scratch rules unchanged.
+
+### 16.2 Prompts
+
+- ClickUp: `Take a task {id} from CU` (unchanged).
+- GitHub issues: `Take an issue #{number}`, since the agent starts in the
+  issue's repo. With a scratch folder (no repo) it is
+  `Take an issue {full_id}`. Switching the workspace updates the prompt
+  unless you edited it.
+
+### 16.3 Agents
+
+New defaults next to claude / codex / shell, in this order: claude, codex,
+pi, opencode, cursor, shell.
+
+```toml
+[agents]
+pi       = ["pi", "{prompt}"]
+opencode = ["opencode", "--prompt", "{prompt}"]
+cursor   = ["cursor-agent", "{prompt}"]
+```
+
+### 16.4 Profile toggle
+
+`` ` `` (backtick) switches to the previous profile (the second entry in
+`recent_profiles`), like `cd -`. Nothing to switch to → faint flash "no
+other profile". `P` stays for the picker. Listed in `?`.
+
+### 16.5 Build order
+
+1. Agents and prompts (§16.2–16.3).
+2. Profile toggle (§16.4).
+3. First Start panel and checkout default (§16.1).
