@@ -9,18 +9,18 @@ import (
 // box draws lines inside a faint border, width cells wide in total.
 func box(lines []string, width int) []string {
 	inner := width - 4
-	out := []string{sFaint.Render("┌" + strings.Repeat("─", width-2) + "┐")}
+	out := []string{sFaint.Render("╭" + strings.Repeat("─", width-2) + "╮")}
 	for _, l := range lines {
 		l = ansi.Truncate(l, inner, "…")
 		out = append(out, sFaint.Render("│ ")+l+strings.Repeat(" ", inner-ansi.StringWidth(l))+sFaint.Render(" │"))
 	}
-	return append(out, sFaint.Render("└"+strings.Repeat("─", width-2)+"┘"))
+	return append(out, sFaint.Render("╰"+strings.Repeat("─", width-2)+"╯"))
 }
 
-// titledBox is box with a title in its top border: ┌─ Title ───┐.
+// titledBox is box with a title in its top border: ╭─ Title ───╮.
 func titledBox(lines []string, width int, title string) []string {
 	out := box(lines, width)
-	out[0] = sFaint.Render("┌─ ") + sBold.Render(title) + sFaint.Render(" "+strings.Repeat("─", width-5-ansi.StringWidth(title))+"┐")
+	out[0] = sFaint.Render("╭─ ") + sBold.Render(title) + sFaint.Render(" "+strings.Repeat("─", width-5-ansi.StringWidth(title))+"╮")
 	return out
 }
 

@@ -64,3 +64,13 @@ func TestStatusPickerLayout(t *testing.T) {
 		}
 	}
 }
+
+// Boxes (popups, help, Start panel) have round corners.
+func TestBoxesHaveRoundCorners(t *testing.T) {
+	for _, b := range [][]string{box([]string{"x"}, 10), titledBox([]string{"x"}, 20, "Start")} {
+		top, bottom := ansi.Strip(b[0]), ansi.Strip(b[len(b)-1])
+		if !strings.HasPrefix(top, "╭") || !strings.HasSuffix(top, "╮") || !strings.HasPrefix(bottom, "╰") || !strings.HasSuffix(bottom, "╯") {
+			t.Errorf("corners: %q %q", top, bottom)
+		}
+	}
+}
