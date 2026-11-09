@@ -11,6 +11,7 @@ import (
 
 	"github.com/slavafyi/cuddle/internal/clickup"
 	"github.com/slavafyi/cuddle/internal/config"
+	"github.com/slavafyi/cuddle/internal/rex"
 	"github.com/slavafyi/cuddle/internal/run"
 	"github.com/slavafyi/cuddle/internal/store"
 	"github.com/slavafyi/cuddle/internal/ui"
@@ -40,14 +41,20 @@ func runApp() error {
 	if err := store.Load(store.CachePath(), &cache); err != nil || cache.Version != store.CacheVersion {
 		cache = store.Cache{} // unreadable or old cache: start fresh
 	}
+	var state store.State
+	if err := store.Load(store.StatePath(), &state); err != nil {
+		return fmt.Errorf("%w (fix or move the file; it links tasks to Rex tabs)", err)
+	}
 	deps := ui.Deps{
 		Config: cfg,
 		ClickUp: &clickup.HTTP{
 			BaseURL: clickup.DefaultBaseURL, Token: token,
 			TeamID: cfg.WorkspaceID, LeadFieldID: cfg.LeadFieldID,
 		},
+		Rex:       &rex.CLI{Runner: runner},
 		Runner:    runner,
 		Cache:     cache,
+		State:     state,
 		CachePath: store.CachePath(),
 		StatePath: store.StatePath(),
 	}

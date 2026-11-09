@@ -3,7 +3,9 @@ package ui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -12,8 +14,10 @@ import (
 
 	"github.com/slavafyi/cuddle/internal/clickup"
 	"github.com/slavafyi/cuddle/internal/config"
+	"github.com/slavafyi/cuddle/internal/rex"
 	"github.com/slavafyi/cuddle/internal/run"
 	"github.com/slavafyi/cuddle/internal/store"
+	"github.com/slavafyi/cuddle/internal/workspace"
 )
 
 var (
@@ -74,28 +78,44 @@ func sampleTasks() []clickup.Task {
 }
 
 type testEnv struct {
-	app    *App
-	cu     *fakeClickUp
-	runner *run.Fake
-	cache  string
+	app     *App
+	cu      *fakeClickUp
+	rex     *fakeRex
+	runner  *run.Fake
+	cache   string
+	state   string
+	scratch string
 }
 
 func newEnv(t *testing.T) *testEnv {
 	t.Helper()
 	cfg := config.Default()
 	cfg.WorkspaceID, cfg.LeadFieldID = "77", "lead"
+	dir := t.TempDir()
+	cfg.ScratchRoot = filepath.Join(dir, "research")
+	cfg.WorktreeRoot = filepath.Join(dir, "worktrees")
 	e := &testEnv{
-		cu:     &fakeClickUp{tasks: sampleTasks()},
-		runner: &run.Fake{},
-		cache:  filepath.Join(t.TempDir(), "cache.json"),
+		cu:      &fakeClickUp{tasks: sampleTasks()},
+		rex:     &fakeRex{sessions: map[string]string{}},
+		runner:  &run.Fake{},
+		cache:   filepath.Join(dir, "cache.json"),
+		state:   filepath.Join(dir, "state.json"),
+		scratch: cfg.ScratchRoot,
 	}
 	e.app = NewApp(Deps{
 		Config:    cfg,
 		ClickUp:   e.cu,
+		Rex:       e.rex,
 		Runner:    e.runner,
 		CachePath: e.cache,
-		StatePath: filepath.Join(t.TempDir(), "state.json"),
-		Now:       func() time.Time { return testNow },
+		StatePath: e.state,
+		Cache: store.Cache{Repos: []workspace.Repo{
+			{Name: "dawn", Path: "/r/dawn"},
+			{Name: "harbor-and-goods", Path: "/r/harbor-and-goods"},
+			{Name: "snowcap", Path: "/r/snowcap"},
+			{Name: "snowcap-subscriptions", Path: "/r/snowcap-subscriptions"},
+		}, ReposAt: testNow},
+		Now: func() time.Time { return testNow },
 	})
 	e.app.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	return e
@@ -145,4 +165,68 @@ func (e *testEnv) cacheOnDisk(t *testing.T) store.Cache {
 		t.Fatal(err)
 	}
 	return c
+}
+
+type fakeRex struct {
+	mu       sync.Mutex
+	sessions map[string]string
+	blocks   map[string]bool
+	statuses map[string]rex.Status
+	lines    map[string]string
+	calls    []string
+	focusErr error
+	next     int
+}
+
+func (f *fakeRex) log(s string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, s)
+}
+func (f *fakeRex) Sessions(context.Context) (map[string]string, error) { return f.sessions, nil }
+func (f *fakeRex) NewSession(_ context.Context, name, dir, window string, argv []string) (rex.Placement, error) {
+	f.log("new-session " + name + " | " + dir + " | " + window + " | " + strings.Join(argv, " "))
+	f.next++
+	p := rex.Placement{SessionID: "session:" + name, WindowID: fmt.Sprintf("window:%d", f.next), BlockID: fmt.Sprintf("block:%d", f.next)}
+	if f.sessions == nil {
+		f.sessions = map[string]string{}
+	}
+	f.sessions[p.SessionID] = name
+	if f.blocks == nil {
+		f.blocks = map[string]bool{}
+	}
+	f.blocks[p.BlockID] = true
+	return p, nil
+}
+func (f *fakeRex) NewWindow(_ context.Context, s, name, dir string, argv []string) (rex.Placement, error) {
+	f.log("new-window " + s + " | " + name + " | " + dir + " | " + strings.Join(argv, " "))
+	f.next++
+	p := rex.Placement{SessionID: s, WindowID: fmt.Sprintf("window:%d", f.next), BlockID: fmt.Sprintf("block:%d", f.next)}
+	if f.blocks == nil {
+		f.blocks = map[string]bool{}
+	}
+	f.blocks[p.BlockID] = true
+	return p, nil
+}
+func (f *fakeRex) Blocks(_ context.Context, s string) (map[string]bool, error) { return f.blocks, nil }
+func (f *fakeRex) Status(_ context.Context, s, b string) (rex.Status, error) {
+	return f.statuses[b], nil
+}
+func (f *fakeRex) Focus(_ context.Context, s, w string) error {
+	f.log("focus " + s + " " + w)
+	return f.focusErr
+}
+func (f *fakeRex) CloseWindow(_ context.Context, s, w string) error {
+	f.log("close " + s + " " + w)
+	return nil
+}
+func (f *fakeRex) LastLine(_ context.Context, s, b string) (string, error) { return f.lines[b], nil }
+
+func (e *testEnv) stateOnDisk(t *testing.T) store.State {
+	t.Helper()
+	var s store.State
+	if err := store.Load(e.state, &s); err != nil {
+		t.Fatal(err)
+	}
+	return s
 }

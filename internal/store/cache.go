@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/slavafyi/cuddle/internal/clickup"
+	"github.com/slavafyi/cuddle/internal/workspace"
 )
 
 // CacheVersion is the current cache file format.
@@ -12,11 +13,13 @@ const CacheVersion = 1
 
 // Cache is data fetched from ClickUp and GitHub. It is safe to delete.
 type Cache struct {
-	Version       int            `json:"version"`
-	Me            clickup.User   `json:"me"`
-	Tasks         []clickup.Task `json:"tasks"`
-	TasksSyncedAt time.Time      `json:"tasks_synced_at,omitzero"`
-	TasksFullAt   time.Time      `json:"tasks_full_at,omitzero"`
+	Version       int              `json:"version"`
+	Me            clickup.User     `json:"me"`
+	Tasks         []clickup.Task   `json:"tasks"`
+	TasksSyncedAt time.Time        `json:"tasks_synced_at,omitzero"`
+	TasksFullAt   time.Time        `json:"tasks_full_at,omitzero"`
+	Repos         []workspace.Repo `json:"repos"`
+	ReposAt       time.Time        `json:"repos_at,omitzero"`
 }
 
 // CachePath is the default cache file.

@@ -13,8 +13,10 @@ import (
 
 	"github.com/slavafyi/cuddle/internal/clickup"
 	"github.com/slavafyi/cuddle/internal/config"
+	"github.com/slavafyi/cuddle/internal/rex"
 	"github.com/slavafyi/cuddle/internal/run"
 	"github.com/slavafyi/cuddle/internal/store"
+	"github.com/slavafyi/cuddle/internal/workspace"
 )
 
 // Tab is one of the four views.
@@ -36,14 +38,17 @@ const (
 	tasksEvery       = 3 * time.Minute
 	tasksFullEvery   = 30 * time.Minute
 	tasksSinceMargin = time.Minute
+	reposEvery       = 24 * time.Hour
 )
 
 // Deps are the services the UI uses.
 type Deps struct {
 	Config    config.Config
 	ClickUp   clickup.Client
+	Rex       rex.Client
 	Runner    run.Runner
 	Cache     store.Cache
+	State     store.State
 	CachePath string
 	StatePath string
 	Now       func() time.Time
@@ -58,6 +63,7 @@ type App struct {
 	flash  string
 
 	cache        store.Cache
+	state        store.State
 	loadingTasks bool
 	syncErr      error
 
@@ -69,6 +75,7 @@ type App struct {
 	statuses    map[string][]clickup.Status
 	input       string
 	commentTask string
+	start       *startPanel
 }
 
 // Messages.
@@ -83,6 +90,10 @@ type (
 	tickMsg  time.Time
 	errMsg   struct{ err error }
 	savedMsg struct{}
+	reposMsg struct {
+		repos []workspace.Repo
+		at    time.Time
+	}
 )
 
 // NewApp returns the root model.
@@ -94,6 +105,7 @@ func NewApp(d Deps) *App {
 		d.Runner = run.Exec{}
 	}
 	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView(), today: newTodayView(), statuses: map[string][]clickup.Status{}}
+	a.state = d.State
 	a.applyCache(d.Cache)
 	return a
 }
@@ -114,7 +126,31 @@ func (a *App) rebuild() {
 
 // Init loads tasks and starts the refresh timer.
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(a.refreshTasks(true), a.tick())
+	return tea.Batch(a.refreshTasks(true), a.scanRepos(false), a.tick())
+}
+
+// scanRepos rebuilds the local repo list when it is older than a day, or
+// always when force is set.
+func (a *App) scanRepos(force bool) tea.Cmd {
+	if !force && !a.cache.ReposAt.IsZero() && a.now().Sub(a.cache.ReposAt) < reposEvery {
+		return nil
+	}
+	roots, now := a.deps.Config.RepoRoots, a.now()
+	return func() tea.Msg { return reposMsg{repos: workspace.ScanRepos(roots), at: now} }
+}
+
+func (a *App) saveState() tea.Cmd {
+	s, path := a.state, a.deps.StatePath
+	if path == "" {
+		return nil
+	}
+	s.Version = store.StateVersion
+	return func() tea.Msg {
+		if err := store.Save(path, s); err != nil {
+			return errMsg{fmt.Errorf("save state: %w", err)}
+		}
+		return savedMsg{}
+	}
 }
 
 func (a *App) tick() tea.Cmd {
@@ -208,6 +244,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.showPicker(msg.taskID, msg.statuses)
 	case writeMsg:
 		return a, a.onWrite(msg)
+	case launchedMsg:
+		return a, a.onLaunched(msg)
+	case reposMsg:
+		a.cache.Repos, a.cache.ReposAt = msg.repos, msg.at
+		return a, a.saveCache()
 	case errMsg:
 		a.flash = sRed.Render(msg.err.Error())
 	}
@@ -221,6 +262,8 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return a.pickerKey(k)
 	case modeComment:
 		return a.commentKey(msg)
+	case modeStart:
+		return a.startKey(msg)
 	}
 	switch k {
 	case "q", "ctrl+c":
@@ -289,6 +332,9 @@ func (a *App) taskAction(k string) tea.Cmd {
 		a.mode, a.input, a.commentTask = modeComment, "", t.ID
 	case "a":
 		return a.toggleAssign(t)
+	case "enter", "shift+enter":
+		a.openStart(t)
+		return a.scanRepos(false)
 	}
 	return nil
 }
@@ -369,8 +415,11 @@ func (a *App) Render() string {
 	}
 	b.WriteString(ansi.Truncate(flash, a.width, "…") + "\n")
 	b.WriteString(ansi.Truncate(sFaint.Render(keys), a.width, "…"))
-	if a.mode == modeStatus {
+	switch a.mode {
+	case modeStatus:
 		return overlay(b.String(), a.renderPicker(), max(2, (a.width-44)/2), 2)
+	case modeStart:
+		return overlay(b.String(), a.renderStart(a.height-2), max(0, a.width-panelWidth), 2)
 	}
 	return b.String()
 }
@@ -395,14 +444,14 @@ func (a *App) viewParts() (sub string, body func(h int) string, detail []string,
 	switch a.tab {
 	case TabToday:
 		sub = a.today.subHeader(now)
-		body = func(h int) string { return a.today.list.render(a.width, h) }
+		body = func(h int) string { return a.today.list.render(a.bodyWidth(), h) }
 		if t, ok := a.selectedTask(); ok {
 			detail = taskDetail(t, me, now)
 		}
 		keys = "j/k move · s status · c comment · a assign · o open · r refresh · 1–4 views · q quit"
 	case TabTasks:
 		sub = a.tasks.subHeader(a.cache.Tasks, me)
-		body = func(h int) string { return a.tasks.list.render(a.width, h) }
+		body = func(h int) string { return a.tasks.list.render(a.bodyWidth(), h) }
 		if t, ok := a.selectedTask(); ok {
 			detail = taskDetail(t, me, now)
 		}
@@ -413,6 +462,14 @@ func (a *App) viewParts() (sub string, body func(h int) string, detail []string,
 		keys = "1–4 views · q quit"
 	}
 	return
+}
+
+// bodyWidth is the list width, leaving room for the Start panel when open.
+func (a *App) bodyWidth() int {
+	if a.mode == modeStart {
+		return max(20, a.width-panelWidth-1)
+	}
+	return a.width
 }
 
 func (a *App) tabBar() string {

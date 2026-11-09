@@ -1,0 +1,159 @@
+package ui
+
+import (
+	"errors"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/slavafyi/cuddle/internal/run"
+	"github.com/slavafyi/cuddle/internal/workspace"
+)
+
+func TestEnterOpensStartPanelWithDefaults(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t2") // DEV-7700 Promo, Snowcap, to start, Coding, assigned to me
+	e.press("enter")
+	if e.app.mode != modeStart {
+		t.Fatal("panel not open")
+	}
+	p := e.app.start
+	if p.kind != workspace.Worktree {
+		t.Errorf("kind = %v", p.kind)
+	}
+	if r, _ := p.repo(); r.Name != "snowcap" {
+		t.Errorf("first repo = %q (want client match first)", r.Name)
+	}
+	if p.branch != "feature/dev-7700-promo-checkout-personalisation" {
+		t.Errorf("branch = %q", p.branch)
+	}
+	if !p.moveStatus || p.showAssign {
+		t.Errorf("move=%v showAssign=%v", p.moveStatus, p.showAssign)
+	}
+	out := plain(e)
+	for _, want := range []string{"Start task", "DEV-7700", "● worktree", "snowcap", "feature/dev-7700-promo", "Take a task DEV-7700 from CU", "new session Snowcap", "Move to in progress", "ctrl-s"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("panel missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestResearchTaskDefaultsToScratch(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t4") // Research low stock notifications
+	e.press("enter")
+	if e.app.start.kind != workspace.Scratch {
+		t.Errorf("kind = %v", e.app.start.kind)
+	}
+	if !strings.Contains(plain(e), "dev-7053-research-low-stock-notifications") || !strings.Contains(plain(e), "● scratch") {
+		t.Errorf("scratch folder not shown:\n%s", plain(e))
+	}
+}
+
+func TestLeadOnlyTaskOffersAssign(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t3") // pending, with Malcolm
+	e.press("enter")
+	p := e.app.start
+	if !p.showAssign || !p.assign || p.moveStatus {
+		t.Errorf("showAssign=%v assign=%v move=%v", p.showAssign, p.assign, p.moveStatus)
+	}
+}
+
+func TestPanelEditing(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t2")
+	e.press("enter")
+	p := e.app.start
+	e.press("right") // workspace → checkout
+	if p.kind != workspace.Checkout {
+		t.Errorf("kind = %v", p.kind)
+	}
+	e.press("tab", "s", "u", "b") // repo filter
+	if r, _ := p.repo(); r.Name != "snowcap-subscriptions" {
+		t.Errorf("filtered repo = %q", r.Name)
+	}
+	e.press("backspace", "backspace", "backspace", "right")
+	if r, _ := p.repo(); r.Name == "snowcap" {
+		t.Errorf("right should move to the next repo, still %q", r.Name)
+	}
+	e.press("esc")
+	if e.app.mode != modeNormal || len(e.rex.calls) != 0 {
+		t.Errorf("esc: mode=%v rex=%v", e.app.mode, e.rex.calls)
+	}
+}
+
+func TestLaunchScratchAgent(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t4")
+	e.press("enter", "ctrl+s")
+	if e.app.mode != modeNormal {
+		t.Fatal("panel still open")
+	}
+	dir := filepath.Join(e.scratch, "dev-7053-research-low-stock-notifications")
+	want := "new-session Snowcap | " + dir + " | DEV-7053 Research low stock notifications | claude Take a task DEV-7053 from CU"
+	if len(e.rex.calls) < 1 || e.rex.calls[0] != want {
+		t.Fatalf("rex calls:\n%s\nwant:\n%s", strings.Join(e.rex.calls, "\n"), want)
+	}
+	if got := e.cu.writes; len(got) != 1 || got[0] != "status t4 in progress" {
+		t.Errorf("clickup writes = %v", got)
+	}
+	if status(e, "t4") != "in progress" {
+		t.Errorf("task not updated on screen: %q", status(e, "t4"))
+	}
+	st := e.stateOnDisk(t)
+	if len(st.Agents) != 1 || st.Agents[0].TaskID != "t4" || st.ClientSessions["Snowcap"] != "session:Snowcap" {
+		t.Errorf("state = %+v", st)
+	}
+	if !strings.Contains(plain(e), "started DEV-7053") {
+		t.Errorf("no confirmation:\n%s", plain(e))
+	}
+}
+
+func TestLaunchUsesExistingClientSessionAndRemembersRepo(t *testing.T) {
+	e := newEnv(t)
+	e.runner.Responses = []run.Response{
+		{Match: "git -C /r/snowcap-subscriptions rev-parse", Err: errors.New("no branch")},
+		{Match: "git -C /r/snowcap-subscriptions symbolic-ref", Out: "origin/main"},
+	}
+	e.rex.sessions["session:S"] = "Snowcap"
+	e.app.state.ClientSessions = map[string]string{"Snowcap": "session:S"}
+	e.load(t)
+	selectTask(t, e, "t2")
+	e.press("enter", "tab", "s", "u", "b", "tab", "tab", "tab", "x", "ctrl+s")
+	if len(e.rex.calls) == 0 || !strings.HasPrefix(e.rex.calls[0], "new-window session:S | DEV-7700 ") {
+		t.Fatalf("rex calls: %v", e.rex.calls)
+	}
+	if !strings.HasSuffix(e.rex.calls[0], "claude Take a task DEV-7700 from CUx") {
+		t.Errorf("edited prompt not used: %s", e.rex.calls[0])
+	}
+	st := e.stateOnDisk(t)
+	if got := st.RecentRepos["Snowcap"]; len(got) != 1 || got[0] != "snowcap-subscriptions" {
+		t.Errorf("recent repos = %v", got)
+	}
+	// Next time, the remembered repo comes first.
+	selectTask(t, e, "t4")
+	e.press("enter", "left", "left") // scratch → checkout → worktree
+	if r, _ := e.app.start.repo(); r.Name != "snowcap-subscriptions" {
+		t.Errorf("remembered repo not first: %q", r.Name)
+	}
+}
+
+func TestLaunchErrorKeepsPanelClosedAndShowsError(t *testing.T) {
+	e := newEnv(t)
+	e.runner.Responses = []run.Response{{Match: "git -C /r/snowcap fetch", Err: errors.New("could not read from remote")}}
+	e.load(t)
+	selectTask(t, e, "t2")
+	e.press("enter", "ctrl+s")
+	if !strings.Contains(plain(e), "could not read from remote") {
+		t.Errorf("error not shown:\n%s", plain(e))
+	}
+	if len(e.rex.calls) != 0 || len(e.cu.writes) != 0 {
+		t.Errorf("later steps ran: rex=%v cu=%v", e.rex.calls, e.cu.writes)
+	}
+}
