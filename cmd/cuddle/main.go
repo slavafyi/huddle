@@ -11,6 +11,7 @@ import (
 
 	"github.com/slavafyi/cuddle/internal/clickup"
 	"github.com/slavafyi/cuddle/internal/config"
+	"github.com/slavafyi/cuddle/internal/github"
 	"github.com/slavafyi/cuddle/internal/rex"
 	"github.com/slavafyi/cuddle/internal/run"
 	"github.com/slavafyi/cuddle/internal/store"
@@ -51,6 +52,7 @@ func runApp() error {
 			BaseURL: clickup.DefaultBaseURL, Token: token,
 			TeamID: cfg.WorkspaceID, LeadFieldID: cfg.LeadFieldID,
 		},
+		GitHub:    &github.GH{Runner: runner, Org: cfg.GitHubOrg},
 		Rex:       &rex.CLI{Runner: runner},
 		Runner:    runner,
 		Cache:     cache,
@@ -58,6 +60,8 @@ func runApp() error {
 		CachePath: store.CachePath(),
 		StatePath: store.StatePath(),
 		Watch:     rex.Watch,
+
+		HomeSession: os.Getenv("REX_SESSION"),
 	}
 	_, err = tea.NewProgram(ui.NewApp(deps)).Run()
 	return err

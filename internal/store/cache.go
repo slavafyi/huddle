@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/slavafyi/cuddle/internal/clickup"
+	"github.com/slavafyi/cuddle/internal/github"
 	"github.com/slavafyi/cuddle/internal/workspace"
 )
 
@@ -20,6 +21,8 @@ type Cache struct {
 	TasksFullAt   time.Time        `json:"tasks_full_at,omitzero"`
 	Repos         []workspace.Repo `json:"repos"`
 	ReposAt       time.Time        `json:"repos_at,omitzero"`
+	PRs           []github.PR      `json:"prs"`
+	PRsAt         time.Time        `json:"prs_at,omitzero"`
 }
 
 // CachePath is the default cache file.

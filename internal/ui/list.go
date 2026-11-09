@@ -171,8 +171,24 @@ func (l *list) widths(total int) []int {
 		ws[i] = c.width
 		used += c.width
 	}
+	// When space is short, shrink the widest fixed columns (not below 4)
+	// so the flexible column keeps at least minFlex cells.
+	const minFlex = 16
+	for flex >= 0 && used+minFlex > total {
+		widest := -1
+		for i, w := range ws {
+			if i != flex && w > 4 && (widest < 0 || w > ws[widest]) {
+				widest = i
+			}
+		}
+		if widest < 0 {
+			break
+		}
+		ws[widest]--
+		used--
+	}
 	if flex >= 0 {
-		ws[flex] = max(8, total-used)
+		ws[flex] = max(4, total-used)
 	}
 	return ws
 }

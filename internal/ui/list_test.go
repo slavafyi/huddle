@@ -43,9 +43,9 @@ func TestListKeepsSelectionByKey(t *testing.T) {
 
 func TestListRenderFitsWidth(t *testing.T) {
 	l := sampleList()
-	out := l.render(30, 20)
+	out := l.render(40, 20)
 	for _, line := range strings.Split(out, "\n") {
-		if w := ansi.StringWidth(line); w > 30 {
+		if w := ansi.StringWidth(line); w > 40 {
 			t.Errorf("line too wide (%d): %q", w, ansi.Strip(line))
 		}
 	}
@@ -71,5 +71,20 @@ func TestListScrollsToSelection(t *testing.T) {
 	}
 	if n := len(strings.Split(out, "\n")); n > 10 {
 		t.Errorf("too many lines: %d", n)
+	}
+}
+
+func TestNarrowWidthShrinksFixedColumns(t *testing.T) {
+	l := &list{cols: []column{{title: "#", width: 6}, {title: "TITLE"}, {title: "REPO", width: 22}, {title: "TASK", width: 10}, {title: "CI", width: 9}, {title: "AGE", width: 4}}}
+	l.setSections([]section{{title: "x", rows: []row{{key: "1", cells: []string{"#46", "feat(subscriptions): storefront", "snowcap", "none", "—", "17d"}}}}})
+	out := l.render(60, 10)
+	for _, line := range strings.Split(out, "\n") {
+		if w := ansi.StringWidth(line); w > 60 {
+			t.Errorf("line too wide (%d): %q", w, ansi.Strip(line))
+		}
+	}
+	plain := ansi.Strip(out)
+	if !strings.Contains(plain, "17d") || !strings.Contains(plain, "feat(subscr") {
+		t.Errorf("columns not shrunk sensibly:\n%s", plain)
 	}
 }

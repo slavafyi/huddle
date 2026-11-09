@@ -13,6 +13,7 @@ import (
 
 	"github.com/slavafyi/cuddle/internal/clickup"
 	"github.com/slavafyi/cuddle/internal/config"
+	"github.com/slavafyi/cuddle/internal/github"
 	"github.com/slavafyi/cuddle/internal/rex"
 	"github.com/slavafyi/cuddle/internal/run"
 	"github.com/slavafyi/cuddle/internal/store"
@@ -45,6 +46,7 @@ const (
 type Deps struct {
 	Config    config.Config
 	ClickUp   clickup.Client
+	GitHub    github.Client
 	Rex       rex.Client
 	Runner    run.Runner
 	Cache     store.Cache
@@ -52,6 +54,8 @@ type Deps struct {
 	CachePath string
 	StatePath string
 	Now       func() time.Time
+	// HomeSession is the Rex session cuddle runs in, for opening diffs.
+	HomeSession string
 	// Watch starts the Rex event stream. Nil disables live events.
 	Watch func(ctx context.Context) (<-chan rex.Event, error)
 }
@@ -72,6 +76,10 @@ type App struct {
 	tasks  *taskView
 	today  *todayView
 	agents *agentView
+	prs    *prView
+
+	loadingPRs bool
+	prErr      error
 
 	agentInfo   map[string]agentInfo
 	confirmText string
@@ -111,7 +119,7 @@ func NewApp(d Deps) *App {
 	if d.Runner == nil {
 		d.Runner = run.Exec{}
 	}
-	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView(), today: newTodayView(), agents: newAgentView(),
+	a := &App{deps: d, width: 100, height: 30, tasks: newTaskView(), today: newTodayView(), agents: newAgentView(), prs: newPRView(),
 		statuses: map[string][]clickup.Status{}, agentInfo: map[string]agentInfo{}}
 	a.state = d.State
 	a.applyCache(d.Cache)
@@ -132,11 +140,12 @@ func (a *App) rebuild() {
 	a.tasks.rebuild(a.cache.Tasks, a.cache.Me.ID, now, l)
 	a.today.rebuild(a.cache.Tasks, a.cache.Me.ID, now, l)
 	a.agents.rebuild(a.state.Agents, a.agentInfo, now)
+	a.prs.rebuild(a.cache.PRs, a.cache.Tasks, now)
 }
 
 // Init loads tasks and starts the refresh timer.
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(a.refreshTasks(true), a.scanRepos(false), a.refreshAgents(), a.startWatch(), a.tick())
+	return tea.Batch(a.refreshTasks(true), a.refreshPRs(), a.scanRepos(false), a.refreshAgents(), a.startWatch(), a.tick())
 }
 
 // scanRepos rebuilds the local repo list when it is older than a day, or
@@ -226,6 +235,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.handleKey(msg)
 	case tickMsg:
 		cmds := []tea.Cmd{a.tick(), a.refreshAgents()}
+		if a.now().Sub(a.cache.PRsAt) >= prsEvery {
+			cmds = append(cmds, a.refreshPRs())
+		}
 		if full, due := a.tasksDue(); due {
 			cmds = append(cmds, a.refreshTasks(full))
 		}
@@ -273,6 +285,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, waitEvent(msg.ch)
 	case closedMsg:
 		return a, a.onClosed(msg)
+	case prsMsg:
+		return a, a.onPRs(msg)
+	case cleanedMsg:
+		return a, a.onCleaned(msg)
 	case focusedMsg:
 		return a, a.onEnter(enterMsg{taskID: msg.agent.TaskID, agent: &msg.agent, err: msg.err})
 	case reposMsg:
@@ -305,7 +321,7 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "r":
 		a.flash = sFaint.Render("refreshing…")
-		return tea.Batch(a.refreshTasks(true), a.refreshAgents())
+		return tea.Batch(a.refreshTasks(true), a.refreshPRs(), a.refreshAgents())
 	}
 	switch a.tab {
 	case TabTasks:
@@ -313,7 +329,12 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case TabToday:
 		return a.listKey(&a.today.list, k)
 	case TabAgents:
+		if k == "X" {
+			return a.cleanupMerged()
+		}
 		return a.agentKey(k)
+	case TabPRs:
+		return a.prKey(k)
 	}
 	return nil
 }
@@ -356,9 +377,12 @@ func (a *App) taskAction(k string) tea.Cmd {
 	}
 	switch k {
 	case "o":
-		if t.URL != "" {
-			return a.runCmd(run.Cmd{Name: "open", Args: []string{t.URL}})
+		return a.openURL(t.URL)
+	case "p":
+		if p, ok := a.taskPR(t); ok {
+			return a.openURL(p.URL)
 		}
+		a.flash = sFaint.Render("no PR for " + t.Key() + " · branch names with the task ID link them")
 	case "s":
 		return a.openStatusPicker(t)
 	case "c":
@@ -398,6 +422,16 @@ func (a *App) taskByID(id string) (clickup.Task, bool) {
 	}
 	return clickup.Task{}, false
 }
+
+// openURL opens a link in the browser.
+func (a *App) openURL(url string) tea.Cmd {
+	if url == "" {
+		return nil
+	}
+	return a.runCmd(run.Cmd{Name: "open", Args: []string{url}})
+}
+
+func runCmd(name string, args ...string) run.Cmd { return run.Cmd{Name: name, Args: args} }
 
 // runCmd runs an external command in the background and reports failures.
 func (a *App) runCmd(c run.Cmd) tea.Cmd {
@@ -486,26 +520,43 @@ func (a *App) viewParts() (sub string, body func(h int) string, detail []string,
 		if t, ok := a.selectedTask(); ok {
 			detail = taskDetail(t, me, now)
 		}
-		keys = "j/k move · s status · c comment · a assign · o open · r refresh · 1–4 views · q quit"
+		keys = "j/k move · enter start · s status · c comment · a assign · o open · p PR · q quit"
 	case TabTasks:
 		sub = a.tasks.subHeader(a.cache.Tasks, me)
 		body = func(h int) string { return a.tasks.list.render(a.bodyWidth(), h) }
 		if t, ok := a.selectedTask(); ok {
 			detail = taskDetail(t, me, now)
 		}
-		keys = "j/k move · s status · c comment · a assign · o open · t filter · r refresh · q quit"
+		keys = "j/k move · enter start · s status · c comment · a assign · o open · p PR · t filter · q quit"
+	case TabPRs:
+		var mine, review int
+		for _, p := range a.cache.PRs {
+			switch p.Kind {
+			case github.Mine:
+				mine++
+			case github.ReviewRequested:
+				review++
+			}
+		}
+		sub = sFaint.Render(fmt.Sprintf("%d mine · %d review requested · from gh · linked to tasks by task ID in the branch", mine, review))
+		if a.prErr != nil {
+			sub += "\n" + sRed.Render(a.prErr.Error())
+		} else {
+			sub += "\n" + sFaint.Render("enter diff in a Rex tab · o open on GitHub")
+		}
+		body = func(h int) string { return a.prs.list.render(a.bodyWidth(), h) }
+		if p, ok := a.selectedPR(); ok {
+			detail = prDetail(p)
+		}
+		keys = "j/k move · enter diff · o open · r refresh · 1–4 views · q quit"
 	case TabAgents:
 		sub = sFaint.Render(plural(len(a.state.Agents), "agent")+" · tabs started by cuddle, live from Rex") + "\n" +
-			sFaint.Render("enter focus tab · x close tab (asks first)")
+			sFaint.Render("enter focus tab · x close tab · X remove merged worktrees (both ask first)")
 		body = func(h int) string { return a.agents.list.render(a.bodyWidth(), h) }
 		if ag, ok := a.selectedAgent(); ok {
 			detail = agentDetail(ag, a.agentInfo[ag.BlockID])
 		}
-		keys = "j/k move · enter focus · x close · r refresh · 1–4 views · q quit"
-	default:
-		sub = sFaint.Render(tabNames[a.tab])
-		body = func(int) string { return sFaint.Render("coming soon") }
-		keys = "1–4 views · q quit"
+		keys = "j/k move · enter focus · x close · X clean merged · r refresh · 1–4 views · q quit"
 	}
 	return
 }

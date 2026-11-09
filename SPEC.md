@@ -196,17 +196,21 @@ Each commit builds and passes tests.
 
 One fresh agent session per phase.
 
-| # | Phase | Done when |
-| --- | --- | --- |
-| 0 | ~~Checks~~ — done 2026-11-09, see §13 | ✓ |
-| 1 | Skeleton: config, token, empty 4-tab app | tabs switch, `q` quits |
-| 2 | Read tasks + cache + Tasks view | real tasks show |
-| 3 | Status / comment / assign | writes work, undo on error |
-| 4 | Today view | §4.2 tests pass |
-| 5 | Start panel + folders | launch-step tests pass |
-| 6 | Rex launch + focus existing tab | 2nd `enter` only focuses |
-| 7 | Agents view | live states show |
-| 8 | PRs view | link tests pass |
+| # | Phase | Done when | Status |
+| --- | --- | --- | --- |
+| 0 | Checks: the two open questions in §13 | answers in §13 | ✓ 2026-11-09 |
+| 1 | Skeleton: config, token, empty 4-tab app | tabs switch, `q` quits | ✓ |
+| 2 | Read tasks + cache + Tasks view | real tasks show | ✓ |
+| 3 | Status / comment / assign | writes work, undo on error | ✓ (tested with a fake ClickUp only) |
+| 4 | Today view | §4.2 tests pass | ✓ |
+| 5 | Start panel + folders | launch-step tests pass | ✓ |
+| 6 | Rex launch + focus existing tab | 2nd `enter` only focuses | ✓ (focus tested with a fake Rex) |
+| 7 | Agents view | live states show | ✓ |
+| 8 | PRs view | link tests pass | ✓ |
+
+Live checks (read-only, or throwaway Rex sessions) run with
+`CUDDLE_LIVE=1`, `CUDDLE_REX_LIVE=1` or `CUDDLE_GH_LIVE=1`; see the
+`live_test.go` files.
 
 ## 13. Phase 0 results (2026-11-09)
 
