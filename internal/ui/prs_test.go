@@ -3,6 +3,9 @@ package ui
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -65,7 +68,7 @@ func TestPRKeys(t *testing.T) {
 	}
 	e.press("enter")
 	want := "new-window session:home | PR #14 | "
-	if len(e.rex.calls) < 2 || !strings.HasPrefix(e.rex.calls[0], want) || !strings.HasSuffix(e.rex.calls[0], "gh pr diff 14 -R o/snowcap") {
+	if len(e.rex.calls) < 2 || !strings.HasPrefix(e.rex.calls[0], want) || !strings.HasSuffix(e.rex.calls[0], " sh 14 o/snowcap") {
 		t.Errorf("diff tab: %v", e.rex.calls)
 	}
 }
@@ -142,5 +145,32 @@ func TestCleanupSkipsOpenTabsAndReportsGitErrors(t *testing.T) {
 	e.press("X", "y")
 	if !strings.Contains(plain(e), "contains modified files") || len(e.app.state.Agents) != 1 {
 		t.Errorf("git error not reported or agent dropped:\n%s", plain(e))
+	}
+}
+
+// A diff too large for gh pr diff (GitHub's 20000-line limit) falls back
+// to the per-file patches from the PR files API.
+func TestDiffScriptFallsBackToFilesAPI(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "log")
+	fake := "#!/bin/sh\necho \"$*\" | tr '\\n' ' ' >> " + log + "; echo >> " + log + "\n" +
+		"[ \"$1\" = pr ] && { echo 'HTTP 406: diff too large' >&2; exit 1; }\n" +
+		"echo PATCHES\n"
+	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("sh", "-c", diffScript, "sh", "27", "o/journal")
+	cmd.Env = append(os.Environ(), "PATH="+dir+":/usr/bin:/bin", "PAGER=cat")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "PATCHES") {
+		t.Errorf("no fallback output: %q", out)
+	}
+	calls, _ := os.ReadFile(log)
+	lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
+	if len(lines) != 2 || strings.TrimSpace(lines[0]) != "pr diff 27 -R o/journal" || !strings.HasPrefix(lines[1], "api --paginate repos/o/journal/pulls/27/files --jq ") {
+		t.Errorf("gh calls: %q", lines)
 	}
 }
