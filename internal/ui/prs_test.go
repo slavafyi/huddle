@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/slavafyi/huddle/internal/config"
 	"github.com/slavafyi/huddle/internal/github"
 	"github.com/slavafyi/huddle/internal/rex"
 	"github.com/slavafyi/huddle/internal/run"
@@ -66,9 +67,11 @@ func TestPRKeys(t *testing.T) {
 	if calls := e.runner.Calls(); len(calls) != 1 || calls[0] != "open https://github.com/o/snowcap/pull/14" {
 		t.Errorf("open: %v", calls)
 	}
+	e.app.deps.Profile = "work"
+	e.app.deps.Profiles = []config.Profile{{Name: "home", GitHubAccount: "other"}, {Name: "work", GitHubAccount: "me"}}
 	e.press("enter")
 	want := "new-window session:home | PR #14 | "
-	if len(e.rex.calls) < 2 || !strings.HasPrefix(e.rex.calls[0], want) || !strings.HasSuffix(e.rex.calls[0], " sh 14 o/snowcap") {
+	if len(e.rex.calls) < 2 || !strings.HasPrefix(e.rex.calls[0], want) || !strings.HasSuffix(e.rex.calls[0], " sh 14 o/snowcap me") {
 		t.Errorf("diff tab: %v", e.rex.calls)
 	}
 }
@@ -148,29 +151,51 @@ func TestCleanupSkipsOpenTabsAndReportsGitErrors(t *testing.T) {
 	}
 }
 
-// A diff too large for gh pr diff (GitHub's 20000-line limit) falls back
-// to the per-file patches from the PR files API.
-func TestDiffScriptFallsBackToFilesAPI(t *testing.T) {
+// runDiffScript runs diffScript with a fake gh that logs each call as
+// "$GH_TOKEN|args", prints tok-NAME for gh auth token --user NAME, and
+// fails gh pr diff like GitHub does past 20000 lines.
+func runDiffScript(t *testing.T, account string) (string, []string) {
+	t.Helper()
 	dir := t.TempDir()
 	log := filepath.Join(dir, "log")
-	fake := "#!/bin/sh\necho \"$*\" | tr '\\n' ' ' >> " + log + "; echo >> " + log + "\n" +
+	fake := "#!/bin/sh\necho \"$GH_TOKEN|$*\" | tr '\\n' ' ' >> " + log + "; echo >> " + log + "\n" +
+		"[ \"$1 $2\" = 'auth token' ] && { echo \"tok-$4\"; exit; }\n" +
 		"[ \"$1\" = pr ] && { echo 'HTTP 406: diff too large' >&2; exit 1; }\n" +
 		"echo PATCHES\n"
 	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(fake), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("sh", "-c", diffScript, "sh", "27", "o/journal")
-	cmd.Env = append(os.Environ(), "PATH="+dir+":/usr/bin:/bin", "PAGER=cat")
+	cmd := exec.Command("sh", "-c", diffScript, "sh", "27", "o/journal", account)
+	cmd.Env = append(os.Environ(), "PATH="+dir+":/usr/bin:/bin", "PAGER=cat", "GH_TOKEN=")
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(out), "PATCHES") {
+	calls, _ := os.ReadFile(log)
+	var lines []string
+	for _, l := range strings.Split(strings.TrimSpace(string(calls)), "\n") {
+		lines = append(lines, strings.TrimSpace(l))
+	}
+	return string(out), lines
+}
+
+// A diff too large for gh pr diff (GitHub's 20000-line limit) falls back
+// to the per-file patches from the PR files API.
+func TestDiffScriptFallsBackToFilesAPI(t *testing.T) {
+	out, lines := runDiffScript(t, "")
+	if !strings.Contains(out, "PATCHES") {
 		t.Errorf("no fallback output: %q", out)
 	}
-	calls, _ := os.ReadFile(log)
-	lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
-	if len(lines) != 2 || strings.TrimSpace(lines[0]) != "pr diff 27 -R o/journal" || !strings.HasPrefix(lines[1], "api --paginate repos/o/journal/pulls/27/files --jq ") {
+	if len(lines) != 2 || lines[0] != "|pr diff 27 -R o/journal" || !strings.HasPrefix(lines[1], "|api --paginate repos/o/journal/pulls/27/files --jq ") {
+		t.Errorf("gh calls: %q", lines)
+	}
+}
+
+// With a profile github_account, the tab's gh calls use that account's
+// token, read in the tab (huddle never passes the token itself).
+func TestDiffScriptUsesProfileAccount(t *testing.T) {
+	_, lines := runDiffScript(t, "me")
+	if len(lines) != 3 || lines[0] != "|auth token --user me" || lines[1] != "tok-me|pr diff 27 -R o/journal" || !strings.HasPrefix(lines[2], "tok-me|api ") {
 		t.Errorf("gh calls: %q", lines)
 	}
 }

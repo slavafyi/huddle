@@ -152,7 +152,7 @@ func (a *App) prKey(k string) tea.Cmd {
 		}
 		rx, session := a.deps.Rex, a.deps.HomeSession
 		home, _ := os.UserHomeDir()
-		argv := []string{"sh", "-c", diffScript, "sh", strconv.Itoa(p.Number), p.Repo}
+		argv := []string{"sh", "-c", diffScript, "sh", strconv.Itoa(p.Number), p.Repo, a.githubAccount()}
 		return func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
@@ -169,10 +169,22 @@ func (a *App) prKey(k string) tea.Cmd {
 	return nil
 }
 
-// diffScript shows PR $1 of repo $2. GitHub refuses gh pr diff past
+// githubAccount is the current profile's github_account, or "".
+func (a *App) githubAccount() string {
+	for _, p := range a.deps.Profiles {
+		if p.Name == a.deps.Profile {
+			return p.GitHubAccount
+		}
+	}
+	return ""
+}
+
+// diffScript shows PR $1 of repo $2, as account $3 when set: the tab reads
+// that account's token itself, so huddle never passes it. GitHub refuses gh pr diff past
 // 20000 lines (HTTP 406), so then it pages the per-file patches from the
 // PR files API instead.
-const diffScript = `gh pr diff "$1" -R "$2" && exit
+const diffScript = `if [ -n "$3" ]; then GH_TOKEN=$(gh auth token --user "$3") || exit; export GH_TOKEN; fi
+gh pr diff "$1" -R "$2" && exit
 echo "showing the PR's files one by one instead" >&2
 gh api --paginate "repos/$2/pulls/$1/files" --jq '.[] | "diff --git a/\(.filename) b/\(.filename)\n\(.patch // "(no patch: binary or too large)")\n"' | ${PAGER:-less}`
 
