@@ -534,12 +534,19 @@ defaults; the layout below is the current behavior.
 
 ### 16.1 Start panel
 
-Replaces an earlier, busier layout.
+Replaces an earlier, busier layout. The title gets the full width,
+because long repo names squeezed it.
 
-- Box titled `Start`, 54 columns. Top: `{id} {title}` (title bold,
-  wrapped under itself, up to 3 lines, `…` only past that), then
-  `{project} · {status}`, a blank line, `Rex  {session} › new tab`
-  (faint "· session created" when missing), a blank line.
+- Box titled `Start`, 54 columns. Top: the title, bold, full width,
+  wrapped, up to 3 lines (`…` only past that); then one faint line
+  `{id} · {status}`, plus ` · {project}` for sources without a fixed repo
+  (ClickUp: `DEV-7090 · to start · Snowcap`; an issue's ID already names
+  its repo). An ID too long for that line is cut in the middle, so the
+  number and status stay. Then a blank line, `Rex  {session} › new tab`
+  (faint "· new session" when the session doesn't exist yet; on its own
+  line, indented, when it doesn't fit), a blank line. The Rex line is
+  never cut: a session name too long for it keeps both ends
+  (`vite-plugin-…-import-maps`).
 - Fields top to bottom, a blank line between them, each a label line
   (`› Label` bold while focused, else faint) with its value under it,
   indented 2:
@@ -548,7 +555,8 @@ Replaces an earlier, busier layout.
     faint `+N more · type to filter` (just `+N more` while filtering;
     red `no repo matches` when none). What you type shows after the label
     with no quotes: `› Repo  snow▏`. Fixed repo (GitHub issue): just the
-    name, or the red "no local clone" message.
+    name, wrapped after `-` when long, or the red "no local clone"
+    message.
   - **Branch** (worktree only): the full name, wrapped after `-` over as
     many lines as needed (never cut), then a dotted line `┄┄┄`.
   - **Folder** (scratch only): faint parent folder, then the folder name.
