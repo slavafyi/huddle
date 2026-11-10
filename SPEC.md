@@ -201,6 +201,11 @@ panel's repo list keeps a bold `›` instead.
 **List layout:** group titles start at column 2; rows are indented under
 them, cells from column 4; the selected row has `›` in column 0.
 
+**List keys** (Today, Tasks, Issues, PRs, Agents): `j` / `k`, `↑↓`,
+`ctrl+n` / `ctrl+p` move one row and wrap at the ends. `G` goes to the
+last row, `gg` to the first (a single `g` does nothing). `ctrl+d` / `ctrl+u` move one page down / up (the list's visible
+height) and stop at the ends. All of these are listed in `?`.
+
 ## 5. Config and files
 
 - Config: `~/.config/huddle/config.toml`. Shared settings are top-level:
