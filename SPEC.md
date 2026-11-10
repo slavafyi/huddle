@@ -181,7 +181,10 @@ match → no task.
 
 Show cache first, refresh in the background: tasks every 3 min and after
 writes (incremental with `date_updated_gt`, full every 30 min); PRs every
-90 s; repo list daily. Agents are live, not cached. When offline, show cached
+90 s. The local repo list (a folder scan, no network) is rescanned in the
+background at every start and each time the Start panel opens; the cached
+list is used until the scan ends, then an open panel updates (a repo cloned
+a minute ago shows up). Agents are live, not cached. When offline, show cached
 data and say so. A full refresh of one task source replaces only that
 source's tasks; a source that fails keeps its cached tasks.
 
