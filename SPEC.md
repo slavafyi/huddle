@@ -216,6 +216,12 @@ them, cells from column 4; the selected row has `›` in column 0.
 last row, `gg` to the first (a single `g` does nothing). `ctrl+d` / `ctrl+u` move one page down / up (the list's visible
 height) and stop at the ends. All of these are listed in `?`.
 
+**Flash line** (the message line at the bottom): a message, warning or
+error stays until the next key press, which clears it before its own
+action runs (so `r` or `enter` can show a new one). `refreshing…` from `r`
+goes away when the task refresh ends, unless a note or error from it
+replaced it. No timers.
+
 ## 5. Config and files
 
 - Config: `~/.config/huddle/config.toml`. Shared settings are top-level:
