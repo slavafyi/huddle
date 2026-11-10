@@ -109,19 +109,16 @@ func TestIncrementalRefreshUsesLastSync(t *testing.T) {
 	}
 }
 
-func TestTickDecidesRefresh(t *testing.T) {
+// A cycle's task refresh is incremental, and full every 30 minutes.
+func TestCycleDecidesFullRefresh(t *testing.T) {
 	e := newEnv(t)
 	e.app.applyCache(store.Cache{Version: store.CacheVersion, Me: map[string]int64{clickup.SourceName: me.ID}, TasksSyncedAt: testNow.Add(-time.Minute), TasksFullAt: testNow.Add(-time.Minute)})
-	if full, due := e.app.tasksDue(); due {
-		t.Errorf("refresh too early (full=%v)", full)
-	}
-	e.app.cache.TasksSyncedAt = testNow.Add(-4 * time.Minute)
-	if full, due := e.app.tasksDue(); !due || full {
-		t.Errorf("want incremental refresh, got due=%v full=%v", due, full)
+	if e.app.tasksFull() {
+		t.Error("want incremental refresh")
 	}
 	e.app.cache.TasksFullAt = testNow.Add(-31 * time.Minute)
-	if full, due := e.app.tasksDue(); !due || !full {
-		t.Errorf("want full refresh, got due=%v full=%v", due, full)
+	if !e.app.tasksFull() {
+		t.Error("want full refresh")
 	}
 }
 

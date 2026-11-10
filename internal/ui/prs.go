@@ -15,9 +15,6 @@ import (
 	"github.com/slavafyi/huddle/internal/workspace"
 )
 
-// prsEvery is how often PRs refresh (SPEC §4.7).
-const prsEvery = 90 * time.Second
-
 type prsMsg struct {
 	prs []github.PR
 	at  time.Time

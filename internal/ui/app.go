@@ -43,7 +43,7 @@ type tabEntry struct {
 // Refresh timing (SPEC §4.7).
 const (
 	tickEvery        = 15 * time.Second
-	tasksEvery       = 3 * time.Minute
+	syncEvery        = 2 * time.Minute // tasks and PRs, together
 	tasksFullEvery   = 30 * time.Minute
 	tasksSinceMargin = time.Minute
 )
@@ -96,6 +96,7 @@ type App struct {
 	loadingPRs    bool
 	prErr         error
 	loadingAgents bool
+	syncAt        time.Time // when the current tasks + PRs cycle started
 	refreshAgain  bool
 
 	ops       map[uint64]*op
@@ -249,6 +250,7 @@ func (a *App) signals(l agentLookup) task.Signals {
 
 // Init loads tasks and starts the refresh timer.
 func (a *App) Init() tea.Cmd {
+	a.syncAt = a.now()
 	return tea.Batch(a.refreshTasks(true), a.refreshPRs(), a.scanRepos(), a.refreshAgents(), a.startWatch(), a.tick())
 }
 
@@ -268,13 +270,16 @@ func (a *App) tick() tea.Cmd {
 	return tea.Tick(tickEvery, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-// tasksDue reports whether tasks should refresh, and whether fully.
-func (a *App) tasksDue() (full, due bool) {
-	now := a.now()
-	if a.cache.TasksFullAt.IsZero() || now.Sub(a.cache.TasksFullAt) >= tasksFullEvery {
-		return true, true
-	}
-	return false, now.Sub(a.cache.TasksSyncedAt) >= tasksEvery
+// tasksFull reports whether the next task refresh should be a full one.
+func (a *App) tasksFull() bool {
+	return a.cache.TasksFullAt.IsZero() || a.now().Sub(a.cache.TasksFullAt) >= tasksFullEvery
+}
+
+// syncAll refreshes tasks and PRs together and starts a new cycle, so the
+// next background sync is syncEvery from now.
+func (a *App) syncAll() tea.Cmd {
+	a.syncAt = a.now()
+	return tea.Batch(a.refreshTasks(a.tasksFull()), a.refreshPRs())
 }
 
 // refreshTasks fetches tasks from every source in the background. A
@@ -332,11 +337,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.paste(strings.Join(strings.Fields(msg.Content), " "))
 	case tickMsg:
 		cmds := []tea.Cmd{a.tick(), a.refreshAgents()}
-		if a.now().Sub(a.cache.PRsAt) >= prsEvery {
-			cmds = append(cmds, a.refreshPRs())
-		}
-		if full, due := a.tasksDue(); due {
-			cmds = append(cmds, a.refreshTasks(full))
+		if a.now().Sub(a.syncAt) >= syncEvery {
+			cmds = append(cmds, a.syncAll())
 		}
 		return a, tea.Batch(cmds...)
 	case tasksMsg:
@@ -496,6 +498,7 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		a.setTab(cycle(a.pos, d, len(a.tabs)))
 		return nil
 	case "r":
+		a.syncAt = a.now()
 		return tea.Batch(a.refreshTasks(true), a.refreshPRs(), a.refreshAgents())
 	}
 	switch a.tab {
@@ -842,14 +845,20 @@ func (a *App) syncLabel() string {
 	switch {
 	case a.loadingTasks || a.loadingPRs:
 		return sFaint.Render("syncing…")
-	case len(a.deps.Sources) == 0:
-		return ""
 	case a.syncErr != nil && !at.IsZero():
 		return sRed.Render("offline · cached " + ago(a.now().Sub(at)) + " ago")
 	case a.syncErr != nil:
 		return sRed.Render("offline")
-	case at.IsZero():
-		return sFaint.Render("loading…")
+	}
+	// The age of the older sync: tasks (when the profile has sources) or PRs.
+	if len(a.deps.Sources) == 0 {
+		at = time.Time{}
+	}
+	if pr := a.cache.PRsAt; !pr.IsZero() && (at.IsZero() || pr.Before(at)) {
+		at = pr
+	}
+	if at.IsZero() {
+		return ""
 	}
 	return sFaint.Render("synced " + ago(a.now().Sub(at)) + " ago")
 }
