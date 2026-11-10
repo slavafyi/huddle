@@ -77,3 +77,18 @@ func TestQuestionMarkIsTextInPanel(t *testing.T) {
 		t.Errorf("mode=%v prompt=%q", e.app.mode, e.app.start.prompt)
 	}
 }
+
+func TestHelpListsJumpKeys(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	for _, tab := range []string{"1", "2", "3", "4"} {
+		e.press(tab, "?")
+		out := plain(e)
+		for _, want := range []string{"gg / G", "top / bottom", "ctrl+d/u", "page down / up"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("view %s help missing %q", tab, want)
+			}
+		}
+		e.press("esc")
+	}
+}

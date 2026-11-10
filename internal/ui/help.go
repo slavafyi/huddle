@@ -13,15 +13,19 @@ const helpWidth = 70
 type keyHelp struct{ key, what string }
 
 var (
-	taskKeys = []keyHelp{
+	moveKeys = []keyHelp{
 		{"j/k ctrl+n/p", "move"},
-		{"enter", "start / focus agent"},
-		{"shift+enter", "start another agent"},
-		{"s", "status"},
-		{"c", "comment"},
-		{"a", "assign me"},
-		{"o / p", "open task / PR"},
+		{"gg / G", "top / bottom"},
+		{"ctrl+d/u", "page down / up"},
 	}
+	taskKeys = append(append([]keyHelp(nil), moveKeys...),
+		keyHelp{"enter", "start / focus agent"},
+		keyHelp{"shift+enter", "start another agent"},
+		keyHelp{"s", "status"},
+		keyHelp{"c", "comment"},
+		keyHelp{"a", "assign me"},
+		keyHelp{"o / p", "open task / PR"},
+	)
 	panelKeys = []keyHelp{
 		{"tab ctrl+n/p", "next/prev field"},
 		{"space / ←→", "change value"},
@@ -45,9 +49,9 @@ func (a *App) viewKeys() (string, []keyHelp) {
 	case TabTasks:
 		return a.tasks.title, append(append([]keyHelp(nil), taskKeys...), keyHelp{"t", "filter"})
 	case TabPRs:
-		return "PRs", []keyHelp{{"j/k ctrl+n/p", "move"}, {"enter", "diff in a Rex tab"}, {"o", "open on GitHub"}}
+		return "PRs", append(append([]keyHelp(nil), moveKeys...), keyHelp{"enter", "diff in a Rex tab"}, keyHelp{"o", "open on GitHub"})
 	case TabAgents:
-		return "Agents", []keyHelp{{"j/k ctrl+n/p", "move"}, {"enter", "focus tab"}, {"x", "close tab"}, {"X", "clean merged"}}
+		return "Agents", append(append([]keyHelp(nil), moveKeys...), keyHelp{"enter", "focus tab"}, keyHelp{"x", "close tab"}, keyHelp{"X", "clean merged"})
 	}
 	return "Today", taskKeys
 }

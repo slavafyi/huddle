@@ -34,6 +34,7 @@ type list struct {
 	sel      int
 	empty    string
 	touched  bool // the user moved the cursor; keep it on the same row
+	height   int  // lines in the last render, the size of a page
 }
 
 func (l *list) rows() []row {
@@ -86,6 +87,22 @@ func (l *list) move(d int) {
 	l.touched = true
 }
 
+// top and bottom select the first and last row.
+func (l *list) top() { l.sel, l.touched = 0, true }
+
+func (l *list) bottom() {
+	l.sel, l.touched = len(l.rows())-1, true
+	l.clamp()
+}
+
+// page moves the selection by d pages (the height last drawn), stopping
+// at the ends.
+func (l *list) page(d int) {
+	l.sel += d * max(1, l.height)
+	l.touched = true
+	l.clamp()
+}
+
 func (l *list) selected() (row, bool) {
 	rs := l.rows()
 	if l.sel < 0 || l.sel >= len(rs) {
@@ -96,6 +113,7 @@ func (l *list) selected() (row, bool) {
 
 // render draws the list in width × height cells.
 func (l *list) render(width, height int) string {
+	l.height = height
 	if len(l.rows()) == 0 {
 		msg := l.empty
 		if msg == "" {

@@ -117,6 +117,8 @@ type App struct {
 	commentTask string // task.Ref
 	start       *startPanel
 
+	pendingG bool // g pressed once; a second g goes to the top
+
 	profilePicker profilePicker
 	switchTo      string // profile to start next, set when the picker ends the program
 }
@@ -456,6 +458,9 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return a.profileKey(msg)
 	}
 	k = emacsArrow(k)
+	if a.listMove(k) {
+		return nil
+	}
 	switch k {
 	case "?":
 		a.mode = modeHelp
@@ -501,6 +506,43 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return a.prKey(k)
 	}
 	return nil
+}
+
+// listMove handles G / gg (last / first row) and ctrl+d / ctrl+u (page
+// down / up) in the current list. It reports whether it used the key.
+func (a *App) listMove(k string) bool {
+	g := a.pendingG
+	a.pendingG = false
+	var l *list
+	switch a.tab {
+	case TabToday:
+		l = &a.today.list
+	case TabTasks:
+		l = &a.tasks.list
+	case TabPRs:
+		l = &a.prs.list
+	case TabAgents:
+		l = &a.agents.list
+	default:
+		return false
+	}
+	switch k {
+	case "G":
+		l.bottom()
+	case "g":
+		if g {
+			l.top()
+		} else {
+			a.pendingG = true
+		}
+	case "ctrl+d":
+		l.page(1)
+	case "ctrl+u":
+		l.page(-1)
+	default:
+		return false
+	}
+	return true
 }
 
 // listKey moves the cursor in l, or runs a task action.

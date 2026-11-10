@@ -120,3 +120,44 @@ func TestListLayoutAndSelection(t *testing.T) {
 		t.Errorf("selection width %d, want full 40", w)
 	}
 }
+
+func TestListTopBottom(t *testing.T) {
+	l := sampleList()
+	l.bottom()
+	if r, _ := l.selected(); r.key != "3" || !l.touched {
+		t.Errorf("bottom: %s touched=%v", r.key, l.touched)
+	}
+	l.top()
+	if r, _ := l.selected(); r.key != "1" {
+		t.Errorf("top: %s", r.key)
+	}
+}
+
+// page moves by the height last drawn, and stops at the ends (no wrap).
+func TestListPage(t *testing.T) {
+	l := &list{cols: []column{{title: "N"}}}
+	var rows []row
+	for i := 0; i < 30; i++ {
+		rows = append(rows, row{key: string(rune('a' + i)), cells: []string{"x"}})
+	}
+	l.setSections([]section{{title: "all", rows: rows}})
+	l.render(40, 10)
+	l.page(1)
+	if l.sel != 10 {
+		t.Errorf("page down: %d", l.sel)
+	}
+	l.page(1)
+	l.page(1)
+	if l.sel != 29 {
+		t.Errorf("page down at end: %d", l.sel)
+	}
+	l.page(-1)
+	if l.sel != 19 {
+		t.Errorf("page up: %d", l.sel)
+	}
+	l.page(-1)
+	l.page(-1)
+	if l.sel != 0 {
+		t.Errorf("page up at top: %d", l.sel)
+	}
+}

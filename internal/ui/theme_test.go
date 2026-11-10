@@ -126,3 +126,42 @@ func TestCtrlNPMoveLikeArrows(t *testing.T) {
 		t.Errorf("panel ctrl+p: field %v", e.app.start.field)
 	}
 }
+
+// G / gg jump to the last / first row and ctrl+d / ctrl+u move by a page
+// in every list view.
+func TestListJumpKeys(t *testing.T) {
+	ctrl := func(r rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: r, Mod: tea.ModCtrl} }
+	e := newEnv(t)
+	e.load(t)
+	for _, view := range []string{"1", "2"} {
+		e.press(view)
+		l := &e.app.today.list
+		if view == "2" {
+			l = &e.app.tasks.list
+		}
+		last := len(l.rows()) - 1
+		if last < 1 {
+			t.Fatalf("view %s: need 2+ rows", view)
+		}
+		e.press("G")
+		if l.sel != last {
+			t.Errorf("view %s: G → %d, want %d", view, l.sel, last)
+		}
+		e.press("g", "k", "g")
+		if l.sel != last-1 {
+			t.Errorf("view %s: g k g must only move up one: %d", view, l.sel)
+		}
+		e.press("G", "g", "g")
+		if l.sel != 0 {
+			t.Errorf("view %s: gg → %d", view, l.sel)
+		}
+		e.app.Update(ctrl('d'))
+		if l.sel == 0 {
+			t.Errorf("view %s: ctrl+d did not move", view)
+		}
+		e.app.Update(ctrl('u'))
+		if l.sel != 0 {
+			t.Errorf("view %s: ctrl+u → %d", view, l.sel)
+		}
+	}
+}
