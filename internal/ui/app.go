@@ -341,9 +341,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(cmds...)
 	case tasksMsg:
 		a.loadingTasks = false
-		if a.flash == refreshing {
-			a.flash = "" // a note below may replace it
-		}
 		var again tea.Cmd // a write finished while this refresh ran
 		if a.refreshAgain {
 			a.refreshAgain = false
@@ -437,9 +434,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-// refreshing is the flash while a refresh started with r runs.
-var refreshing = sFaint.Render("refreshing…")
-
 // emacsArrow maps ctrl+n / ctrl+p to down / up, so they move like the
 // arrows in lists. (In the Start panel they move between fields.)
 func emacsArrow(k string) string {
@@ -502,7 +496,6 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		a.setTab(cycle(a.pos, d, len(a.tabs)))
 		return nil
 	case "r":
-		a.flash = refreshing
 		return tea.Batch(a.refreshTasks(true), a.refreshPRs(), a.refreshAgents())
 	}
 	switch a.tab {
@@ -847,6 +840,8 @@ func (a *App) tabBar() string {
 func (a *App) syncLabel() string {
 	at := a.cache.TasksSyncedAt
 	switch {
+	case a.loadingTasks || a.loadingPRs:
+		return sFaint.Render("syncing…")
 	case len(a.deps.Sources) == 0:
 		return ""
 	case a.syncErr != nil && !at.IsZero():

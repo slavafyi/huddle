@@ -24,21 +24,41 @@ func TestFlashClearsOnNextKey(t *testing.T) {
 	}
 }
 
-// "refreshing…" goes away when the refresh ends.
-func TestRefreshingClearsWhenDone(t *testing.T) {
+// The header says "syncing…" while tasks refresh, in the background or
+// after r, and "synced …" once done. r puts nothing in the flash line.
+func TestHeaderShowsSyncingTasks(t *testing.T) {
 	e := newEnv(t)
 	e.load(t)
-	e.press("r") // runs the refresh to the end
-	if strings.Contains(ansi.Strip(screen(e.app)), "refreshing…") {
-		t.Errorf("still refreshing:\n%s", ansi.Strip(screen(e.app)))
+	cmd := e.app.refreshTasks(false) // started, not finished
+	if out := ansi.Strip(screen(e.app)); !strings.Contains(out, "syncing…") || strings.Contains(out, "synced") {
+		t.Errorf("while refreshing:\n%s", out)
+	}
+	e.run(cmd)
+	if out := ansi.Strip(screen(e.app)); strings.Contains(out, "syncing…") || !strings.Contains(out, "synced") {
+		t.Errorf("after refresh:\n%s", out)
+	}
+	e.press("r")
+	if e.app.flash != "" {
+		t.Errorf("r flash: %q", ansi.Strip(e.app.flash))
 	}
 }
 
-// A note or error from the refresh replaces "refreshing…" and stays.
-func TestRefreshNoteReplacesRefreshing(t *testing.T) {
+func TestHeaderShowsSyncingPRs(t *testing.T) {
+	e, _ := prEnv(t)
+	cmd := e.app.refreshPRs()
+	if out := ansi.Strip(screen(e.app)); !strings.Contains(out, "syncing…") {
+		t.Errorf("while PRs refresh:\n%s", out)
+	}
+	e.run(cmd)
+	if out := ansi.Strip(screen(e.app)); strings.Contains(out, "syncing…") {
+		t.Errorf("after PRs refresh:\n%s", out)
+	}
+}
+
+// A note from the refresh shows in the flash line.
+func TestRefreshNoteShows(t *testing.T) {
 	e := newEnv(t)
 	e.load(t)
-	e.app.flash = sFaint.Render("refreshing…")
 	e.app.Update(tasksMsg{results: []fetched{{source: "clickup", note: "lead features off", err: errors.New("x")}}})
 	if got := ansi.Strip(e.app.flash); got != "lead features off" {
 		t.Errorf("flash = %q", got)
