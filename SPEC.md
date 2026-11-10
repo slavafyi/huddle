@@ -177,6 +177,10 @@ GitHub issues link first by the PR's closing references
 a branch word (`42` or `42-…`) when the PR is in the issue's repo. No
 match → no task.
 
+`enter` on a PR opens a Rex tab with `gh pr diff`. GitHub refuses diffs
+over 20000 lines (HTTP 406); then the tab pages each file's patch from
+the PR files API (`gh api repos/{owner}/{repo}/pulls/{n}/files`) instead.
+
 ### 4.7 Cache
 
 Show cache first, refresh in the background: tasks every 3 min and after
