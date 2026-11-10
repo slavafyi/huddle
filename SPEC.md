@@ -211,6 +211,17 @@ height) and stop at the ends. All of these are listed in `?`.
 - Config: `~/.config/huddle/config.toml`. Shared settings are top-level:
   repo roots, worktree root, scratch root, branch and prompt templates,
   agent commands (`[agents]`), per-repo base branch (`[repos.base_branch]`).
+- **Schema:** `config.schema.json` in the repo root is a JSON Schema for
+  this file (shared keys, `[agents]`, `[repos.base_branch]`, and profiles
+  with their keys and name rule). Taplo / Even Better TOML use it for checks
+  and completion when the file's first line points to it:
+
+  ```toml
+  #:schema file:///path/to/huddle/config.schema.json
+  ```
+
+  A test fails when the schema's keys and the `toml` tags on `Config`,
+  `Repos` and `Profile` differ; change both together.
 - **Profiles:** every other top-level table is a profile, in file order
   (`agents` and `repos` are reserved names). A profile is one named world:
   its sources, GitHub account, cache and state. Only one is shown at a time.
