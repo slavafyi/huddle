@@ -186,16 +186,16 @@ the token in the tab's command.
 
 ### 4.7 Cache
 
-Show cache first, refresh in the background: tasks every 3 min and after
-writes (incremental with `date_updated_gt`, full every 30 min); PRs every
-90 s. The local repo list (a folder scan, no network) is rescanned in the
+Show cache first, refresh in the background: tasks and PRs together, one
+cycle every 2 min (tasks incremental with `date_updated_gt`, full every
+30 min); tasks also after writes. The local repo list (a folder scan, no network) is rescanned in the
 background at every start and each time the Start panel opens; the cached
 list is used until the scan ends, then an open panel updates (a repo cloned
 a minute ago shows up). Agents are live, not cached.
-`r` refreshes tasks, PRs and agents at once. The header shows
-`syncing…` while tasks or PRs refresh (by `r` or in the background), else
-`synced <age> ago` for tasks (`offline …` when the last task refresh
-failed). Agent checks (every 15 s) don't show there. When offline, show cached
+`r` refreshes tasks, PRs and agents at once and starts a new cycle. The
+header shows `syncing…` while tasks or PRs refresh (by `r` or in the
+background), else `synced <age> ago`, counted from the older of the task
+and PR syncs (`offline …` when the last task refresh failed). Agent checks (every 15 s) don't show there. When offline, show cached
 data and say so. A full refresh of one task source replaces only that
 source's tasks; a source that fails keeps its cached tasks.
 
