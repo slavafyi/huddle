@@ -247,22 +247,35 @@ func TestStartPanelFindsNewClone(t *testing.T) {
 }
 
 // issue_prompt_template replaces the built-in issue prompts, in a repo and
-// in a scratch folder; clickup_prompt_template doesn't touch issues.
+// issue_prompt_template sets the issue prompt in a repo and
+// issue_scratch_prompt_template the one in a scratch folder; each one left
+// out keeps its built-in prompt. clickup_prompt_template doesn't touch
+// issues.
 func TestIssuePrompt(t *testing.T) {
-	e := withIssues(t)
-	e.app.deps.Config.IssuePrompt = "Take issue {id}: {url}"
-	e.app.deps.Config.PromptTemplate = "clickup {id}"
-	selectIn(t, e, "3", task.Ref(github.IssuesSource, "acme/shop#42"))
-	e.press("enter")
-	p := e.app.start
-	want := "Take issue shop#42: https://github.com/acme/shop/issues/42"
-	if p.prompt != want {
-		t.Errorf("repo prompt = %q", p.prompt)
-	}
-	for p.kind != workspace.Scratch {
-		e.press("right")
-	}
-	if p.prompt != want {
-		t.Errorf("scratch prompt = %q", p.prompt)
+	for _, c := range []struct {
+		repo, scratch         string // config
+		wantRepo, wantScratch string
+	}{
+		{"", "", "Take an issue #42", "Take an issue acme/shop#42"},
+		{"Fix {id}: {url}", "", "Fix shop#42: https://github.com/acme/shop/issues/42", "Take an issue acme/shop#42"},
+		{"", "Look at {full_id}", "Take an issue #42", "Look at acme/shop#42"},
+		{"Fix #{number}", "Look at {url}", "Fix #42", "Look at https://github.com/acme/shop/issues/42"},
+	} {
+		e := withIssues(t)
+		e.app.deps.Config.IssuePrompt = c.repo
+		e.app.deps.Config.IssueScratchPrompt = c.scratch
+		e.app.deps.Config.PromptTemplate = "clickup {id}"
+		selectIn(t, e, "3", task.Ref(github.IssuesSource, "acme/shop#42"))
+		e.press("enter")
+		p := e.app.start
+		if p.prompt != c.wantRepo {
+			t.Errorf("%q/%q repo prompt = %q", c.repo, c.scratch, p.prompt)
+		}
+		for p.kind != workspace.Scratch {
+			e.press("right")
+		}
+		if p.prompt != c.wantScratch {
+			t.Errorf("%q/%q scratch prompt = %q", c.repo, c.scratch, p.prompt)
+		}
 	}
 }

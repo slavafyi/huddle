@@ -18,18 +18,19 @@ import (
 
 // Config is the user config from ~/.config/huddle/config.toml.
 type Config struct {
-	RepoRoots        []string            `toml:"repo_roots"`
-	WorktreeRoot     string              `toml:"worktree_root"`
-	ScratchRoot      string              `toml:"scratch_root"`
-	BranchTemplate   string              `toml:"clickup_branch_template"`
-	PromptTemplate   string              `toml:"clickup_prompt_template"` // ClickUp tasks
-	IssuePrompt      string              `toml:"issue_prompt_template"`   // GitHub issues; "" means built-in
-	ScratchTypes     []string            `toml:"scratch_task_types"`
-	ScratchPrefixes  []string            `toml:"scratch_title_prefixes"`
-	Agents           map[string][]string `toml:"agents"`
-	Repos            Repos               `toml:"repos"`
-	StatusInProgress string              `toml:"status_in_progress"`
-	Profiles         []Profile           `toml:"-"` // in file order
+	RepoRoots          []string            `toml:"repo_roots"`
+	WorktreeRoot       string              `toml:"worktree_root"`
+	ScratchRoot        string              `toml:"scratch_root"`
+	BranchTemplate     string              `toml:"clickup_branch_template"`
+	PromptTemplate     string              `toml:"clickup_prompt_template"`       // ClickUp tasks
+	IssuePrompt        string              `toml:"issue_prompt_template"`         // GitHub issues in a repo; "" means built-in
+	IssueScratchPrompt string              `toml:"issue_scratch_prompt_template"` // GitHub issues in scratch; "" means built-in
+	ScratchTypes       []string            `toml:"scratch_task_types"`
+	ScratchPrefixes    []string            `toml:"scratch_title_prefixes"`
+	Agents             map[string][]string `toml:"agents"`
+	Repos              Repos               `toml:"repos"`
+	StatusInProgress   string              `toml:"status_in_progress"`
+	Profiles           []Profile           `toml:"-"` // in file order
 }
 
 // Profile is one named world: its sources, GitHub account, cache and state.
@@ -43,10 +44,11 @@ type Profile struct {
 	GitHubOrgs       []string `toml:"github_orgs"`
 	GitHubIssues     *bool    `toml:"github_issues"` // nil means on
 	// Overrides of the shared settings.
-	RepoRoots      []string `toml:"repo_roots"`
-	ScratchRoot    string   `toml:"scratch_root"`
-	PromptTemplate string   `toml:"clickup_prompt_template"`
-	IssuePrompt    string   `toml:"issue_prompt_template"`
+	RepoRoots          []string `toml:"repo_roots"`
+	ScratchRoot        string   `toml:"scratch_root"`
+	PromptTemplate     string   `toml:"clickup_prompt_template"`
+	IssuePrompt        string   `toml:"issue_prompt_template"`
+	IssueScratchPrompt string   `toml:"issue_scratch_prompt_template"`
 }
 
 // IssuesOn reports whether the profile shows GitHub issues: yes unless
@@ -273,6 +275,9 @@ func (c Config) Use(p Profile) Config {
 	}
 	if p.IssuePrompt != "" {
 		c.IssuePrompt = p.IssuePrompt
+	}
+	if p.IssueScratchPrompt != "" {
+		c.IssueScratchPrompt = p.IssueScratchPrompt
 	}
 	return c
 }

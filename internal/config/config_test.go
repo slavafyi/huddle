@@ -265,19 +265,21 @@ func TestOtherOrgs(t *testing.T) {
 func TestIssuePrompt(t *testing.T) {
 	c, err := Load(write(t, `
 issue_prompt_template = "shared #{number}"
+issue_scratch_prompt_template = "shared {full_id}"
 
 [work]
 [personal]
 issue_prompt_template = "Take issue {id}: {url}"
+issue_scratch_prompt_template = "Look at {url}"
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w := c.Use(c.Profiles[0]); w.IssuePrompt != "shared #{number}" {
-		t.Errorf("work = %q", w.IssuePrompt)
+	if w := c.Use(c.Profiles[0]); w.IssuePrompt != "shared #{number}" || w.IssueScratchPrompt != "shared {full_id}" {
+		t.Errorf("work = %q, %q", w.IssuePrompt, w.IssueScratchPrompt)
 	}
-	if p := c.Use(c.Profiles[1]); p.IssuePrompt != "Take issue {id}: {url}" {
-		t.Errorf("personal = %q", p.IssuePrompt)
+	if p := c.Use(c.Profiles[1]); p.IssuePrompt != "Take issue {id}: {url}" || p.IssueScratchPrompt != "Look at {url}" {
+		t.Errorf("personal = %q, %q", p.IssuePrompt, p.IssueScratchPrompt)
 	}
 }
 

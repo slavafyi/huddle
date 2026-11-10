@@ -200,8 +200,12 @@ func (a *App) defaultPrompt(t task.Task, k workspace.Kind) string {
 	if k == workspace.Scratch && r.ScratchPromptTemplate != "" {
 		tmpl = r.ScratchPromptTemplate
 	}
-	if t.Source == github.IssuesSource && a.deps.Config.IssuePrompt != "" {
-		tmpl = a.deps.Config.IssuePrompt // the same in a repo and in scratch
+	if t.Source == github.IssuesSource {
+		own := a.deps.Config.IssuePrompt
+		if k == workspace.Scratch {
+			own = a.deps.Config.IssueScratchPrompt
+		}
+		tmpl = cmp.Or(own, tmpl)
 	}
 	return workspace.Expand(tmpl, templateVars(t))
 }
