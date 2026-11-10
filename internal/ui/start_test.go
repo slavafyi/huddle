@@ -291,3 +291,26 @@ func TestArrowsStayInField(t *testing.T) {
 		t.Errorf("down on checkbox: field %v move %v", p.field, p.moveStatus)
 	}
 }
+
+// The repo list is rescanned at every start, even when the cached one is
+// fresh, and a rescan keeps the selected repo in an open panel.
+func TestReposRescanAtStartAndInPanel(t *testing.T) {
+	e := newEnv(t)
+	e.disk = []workspace.Repo{{Name: "dawn", Path: "/r/dawn"}, {Name: "snowcap", Path: "/r/snowcap"}, {Name: "new-shop", Path: "/r/new-shop"}}
+	e.run(e.app.scanRepos())
+	if len(e.app.cache.Repos) != 3 {
+		t.Fatalf("start scan skipped: %v", e.app.cache.Repos)
+	}
+	e.load(t)
+	selectTask(t, e, "t2")
+	e.press("enter", "tab", "down")
+	before, _ := e.app.start.repo()
+	e.disk = append(e.disk, workspace.Repo{Name: "aaa", Path: "/r/aaa"})
+	e.run(e.app.scanRepos())
+	if len(e.app.start.repos) != 4 {
+		t.Errorf("panel repos not updated: %v", e.app.start.repos)
+	}
+	if r, _ := e.app.start.repo(); r.Name != before.Name {
+		t.Errorf("selection moved: %q → %q", before.Name, r.Name)
+	}
+}

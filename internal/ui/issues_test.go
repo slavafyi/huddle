@@ -230,3 +230,18 @@ func TestIssuePromptFollowsWorkspace(t *testing.T) {
 		t.Errorf("edited prompt replaced: %q", p.prompt)
 	}
 }
+
+// A repo cloned after the last scan shows up: opening the panel rescans in
+// the background and updates the open panel.
+func TestStartPanelFindsNewClone(t *testing.T) {
+	e := withIssues(t)
+	e.disk = append(append([]workspace.Repo(nil), e.app.cache.Repos...), workspace.Repo{Name: "other", Path: "/r/other", Remote: "acme/other"})
+	selectIn(t, e, "3", task.Ref(github.IssuesSource, "acme/other#5"))
+	e.press("enter")
+	if out := plain(e); strings.Contains(out, "no local clone") {
+		t.Fatalf("still no clone after rescan:\n%s", out)
+	}
+	if r, ok := e.app.start.repo(); !ok || r.Path != "/r/other" {
+		t.Errorf("repo = %+v", r)
+	}
+}

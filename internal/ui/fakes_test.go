@@ -129,6 +129,8 @@ type testEnv struct {
 	cache   string
 	state   string
 	scratch string
+	// disk is what a repo scan finds; nil means the cached list.
+	disk []workspace.Repo
 }
 
 func newEnv(t *testing.T) *testEnv {
@@ -159,6 +161,12 @@ func newEnv(t *testing.T) *testEnv {
 			{Name: "snowcap-subscriptions", Path: "/r/snowcap-subscriptions"},
 		}, ReposAt: testNow},
 		Now: func() time.Time { return testNow },
+		ScanRepos: func([]string) []workspace.Repo {
+			if e.disk != nil {
+				return e.disk
+			}
+			return e.app.cache.Repos
+		},
 	})
 	e.app.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	return e

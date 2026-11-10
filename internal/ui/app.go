@@ -46,7 +46,6 @@ const (
 	tasksEvery       = 3 * time.Minute
 	tasksFullEvery   = 30 * time.Minute
 	tasksSinceMargin = time.Minute
-	reposEvery       = 24 * time.Hour
 )
 
 // Deps are the services the UI uses.
@@ -68,6 +67,8 @@ type Deps struct {
 	HomeSession string
 	// Watch starts the Rex event stream. Nil disables live events.
 	Watch func(ctx context.Context) (<-chan rex.Event, error)
+	// ScanRepos lists the repos under roots. Nil means workspace.ScanRepos.
+	ScanRepos func(roots []string) []workspace.Repo
 }
 
 // App is the root model.
@@ -248,17 +249,19 @@ func (a *App) signals(l agentLookup) task.Signals {
 
 // Init loads tasks and starts the refresh timer.
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(a.refreshTasks(true), a.refreshPRs(), a.scanRepos(false), a.refreshAgents(), a.startWatch(), a.tick())
+	return tea.Batch(a.refreshTasks(true), a.refreshPRs(), a.scanRepos(), a.refreshAgents(), a.startWatch(), a.tick())
 }
 
-// scanRepos rebuilds the local repo list when it is older than a day, or
-// always when force is set.
-func (a *App) scanRepos(force bool) tea.Cmd {
-	if !force && !a.cache.ReposAt.IsZero() && a.now().Sub(a.cache.ReposAt) < reposEvery {
-		return nil
-	}
+// scanRepos rebuilds the local repo list in the background. It runs at
+// start and each time the Start panel opens; until it ends, the cached list
+// is used.
+func (a *App) scanRepos() tea.Cmd {
 	roots, now := a.deps.Config.RepoRoots, a.now()
-	return func() tea.Msg { return reposMsg{repos: workspace.ScanRepos(roots), at: now} }
+	scan := a.deps.ScanRepos
+	if scan == nil {
+		scan = workspace.ScanRepos
+	}
+	return func() tea.Msg { return reposMsg{repos: scan(roots), at: now} }
 }
 
 func (a *App) tick() tea.Cmd {
@@ -421,6 +424,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.onEnter(enterMsg{ref: msg.agent.TaskRef(), agent: &msg.agent, err: msg.err})
 	case reposMsg:
 		a.cache.Repos, a.cache.ReposAt = msg.repos, msg.at
+		if a.mode == modeStart && a.start != nil {
+			a.setPanelRepos(a.start)
+		}
 		return a, a.saveCache()
 	case errMsg:
 		a.flash = sRed.Render(msg.err.Error())
@@ -628,7 +634,7 @@ func (a *App) taskAction(k string) tea.Cmd {
 			return a.enterTask(t)
 		}
 		a.openStart(t)
-		return a.scanRepos(false)
+		return a.scanRepos()
 	}
 	return nil
 }

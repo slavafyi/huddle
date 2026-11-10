@@ -96,7 +96,7 @@ func (a *App) enterTask(t task.Task) tea.Cmd {
 	}
 	if len(agents) == 0 || a.deps.Rex == nil {
 		a.openStart(t)
-		return a.scanRepos(false)
+		return a.scanRepos()
 	}
 	rx := a.deps.Rex
 	return func() tea.Msg {
@@ -126,7 +126,7 @@ func (a *App) onEnter(m enterMsg) tea.Cmd {
 		if t, ok := a.taskByRef(m.ref); ok && a.mode == modeNormal {
 			a.openStart(t)
 		}
-		return a.scanRepos(false)
+		return a.scanRepos()
 	}
 	switch {
 	case m.err == nil:
@@ -147,16 +147,8 @@ func (a *App) openStart(t task.Task) {
 		branch: workspace.Expand(cmp.Or(r.BranchTemplate, cfg.BranchTemplate), v),
 		agents: cfg.AgentNames(),
 	}
-	if r.RepoInList {
-		p.fixedRepo = true
-		if repo, ok := workspace.FindRemote(a.cache.Repos, t.ListID); ok {
-			p.repos = []workspace.Repo{repo}
-		} else {
-			p.noClone = "no local clone of " + t.ListID + " in repo_roots"
-		}
-	} else {
-		p.repos = workspace.RankRepos(a.cache.Repos, t.Project, a.state.RecentRepos[t.Project])
-	}
+	p.fixedRepo = r.RepoInList
+	a.setPanelRepos(p)
 	p.kind = workspace.Checkout
 	if task.WantsScratch(t, cfg.ScratchTypes, cfg.ScratchPrefixes) {
 		p.kind = workspace.Scratch
@@ -173,6 +165,31 @@ func (a *App) openStart(t task.Task) {
 	p.session = a.state.ClientSessions[t.Project]
 	a.start = p
 	a.mode = modeStart
+}
+
+// setPanelRepos fills the panel's repos from the cached list: the issue's
+// clone, or all repos ranked for the client. A repo already selected stays
+// selected.
+func (a *App) setPanelRepos(p *startPanel) {
+	t := p.task
+	prev, had := p.repo()
+	p.repos, p.noClone = nil, ""
+	if p.fixedRepo {
+		if repo, ok := workspace.FindRemote(a.cache.Repos, t.ListID); ok {
+			p.repos = []workspace.Repo{repo}
+		} else {
+			p.noClone = "no local clone of " + t.ListID + " in repo_roots"
+		}
+		return
+	}
+	p.repos = workspace.RankRepos(a.cache.Repos, t.Project, a.state.RecentRepos[t.Project])
+	if had {
+		for i, r := range p.filtered() {
+			if r.Path == prev.Path {
+				p.repoIdx = i
+			}
+		}
+	}
 }
 
 // defaultPrompt is the prompt for t in a workspace of kind k.
