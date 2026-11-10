@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "huddle config",
+  "description": "~/.config/huddle/config.toml (SPEC.md §5). Top-level keys are shared settings; every other top-level table is a profile.",
+  "type": "object",
+  "properties": {
+    "repo_roots": {
+      "description": "Folders whose subfolders are your repos, e.g. [\"~/code/agency/shops\", \"~/code/agency/tools\"]. A leading ~ is your home folder.",
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "worktree_root": {
+      "description": "Where worktrees go: <worktree_root>/<repo>/{id_lower}.",
+      "type": "string",
+      "default": "~/.local/share/huddle/worktrees"
+    },
+    "scratch_root": {
+      "description": "Where scratch folders go: <scratch_root>/{id_lower}-{slug}.",
+      "type": "string",
+      "default": "~/research"
+    },
+    "branch_template": {
+      "description": "Branch name for ClickUp tasks. {id_lower} is the task ID in lowercase, {slug} up to 5 lowercase ASCII words of the title.",
+      "type": "string",
+      "default": "feature/{id_lower}-{slug}"
+    },
+    "prompt_template": {
+      "description": "Agent prompt for ClickUp tasks when the Start panel's prompt is empty. {id} is the task ID.",
+      "type": "string",
+      "default": "Take a task {id} from CU"
+    },
+    "scratch_task_types": {
+      "description": "ClickUp task types that start in a scratch folder by default.",
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["Idea"]
+    },
+    "scratch_title_prefixes": {
+      "description": "Title first words (any case) that make a scratch folder the default workspace.",
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["research", "evaluate", "investigate", "check", "audit"]
+    },
+    "status_in_progress": {
+      "description": "ClickUp status set by \"Move to\" on launch.",
+      "type": "string",
+      "default": "in progress"
+    },
+    "agents": {
+      "description": "Agent commands for the Start panel: name = argv. {prompt} is replaced by the prompt. Your own agents show after the built-in ones, sorted; a built-in name replaces its command.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" },
+        "minItems": 1
+      },
+      "default": {
+        "claude": ["claude", "{prompt}"],
+        "codex": ["codex", "{prompt}"],
+        "pi": ["pi", "{prompt}"],
+        "opencode": ["opencode", "--prompt", "{prompt}"],
+        "cursor": ["cursor-agent", "{prompt}"]
+      }
+    },
+    "repos": {
+      "description": "Per-repo settings, keyed by repo folder name.",
+      "type": "object",
+      "properties": {
+        "base_branch": {
+          "description": "Base branch for new worktrees, e.g. snowcap = \"develop\". Without one, origin/HEAD.",
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "default": {}
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "propertyNames": {
+    "description": "Profile names: letters, digits, - and _ only.",
+    "pattern": "^[A-Za-z0-9_-]+$"
+  },
+  "additionalProperties": { "$ref": "#/definitions/profile" },
+  "definitions": {
+    "profile": {
+      "description": "A profile: one named world with its sources, GitHub account, cache and state.",
+      "type": "object",
+      "properties": {
+        "clickup": {
+          "description": "Show ClickUp tasks in this profile.",
+          "type": "boolean",
+          "default": false
+        },
+        "clickup_workspace": {
+          "description": "ClickUp workspace ID. Found automatically (the only workspace the token sees); set only to override.",
+          "type": "string"
+        },
+        "clickup_lead": {
+          "description": "ID of the ClickUp \"Lead Assignee\" users field. Found automatically (the one users field with \"lead\" in its name); set only to override.",
+          "type": "string"
+        },
+        "github_account": {
+          "description": "gh account whose token this profile uses (gh auth token --user NAME). Default: gh's active account.",
+          "type": "string"
+        },
+        "github_orgs": {
+          "description": "GitHub orgs whose issues and PRs belong to this profile. Without it, the profile gets everything outside other profiles' orgs.",
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "github_issues": {
+          "description": "Show GitHub issues in this profile.",
+          "type": "boolean",
+          "default": true
+        },
+        "repo_roots": {
+          "description": "Overrides the shared repo_roots for this profile.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "scratch_root": {
+          "description": "Overrides the shared scratch_root for this profile.",
+          "type": "string"
+        },
+        "prompt_template": {
+          "description": "Overrides the shared prompt_template for this profile.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
