@@ -191,7 +191,11 @@ writes (incremental with `date_updated_gt`, full every 30 min); PRs every
 90 s. The local repo list (a folder scan, no network) is rescanned in the
 background at every start and each time the Start panel opens; the cached
 list is used until the scan ends, then an open panel updates (a repo cloned
-a minute ago shows up). Agents are live, not cached. When offline, show cached
+a minute ago shows up). Agents are live, not cached.
+`r` refreshes tasks, PRs and agents at once. The header shows
+`syncing…` while tasks or PRs refresh (by `r` or in the background), else
+`synced <age> ago` for tasks (`offline …` when the last task refresh
+failed). Agent checks (every 15 s) don't show there. When offline, show cached
 data and say so. A full refresh of one task source replaces only that
 source's tasks; a source that fails keeps its cached tasks.
 
@@ -218,9 +222,7 @@ height) and stop at the ends. All of these are listed in `?`.
 
 **Flash line** (the message line at the bottom): a message, warning or
 error stays until the next key press, which clears it before its own
-action runs (so `r` or `enter` can show a new one). `refreshing…` from `r`
-goes away when the task refresh ends, unless a note or error from it
-replaced it. No timers.
+action runs (so `enter` can show a new one). No timers.
 
 ## 5. Config and files
 
