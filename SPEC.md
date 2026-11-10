@@ -140,7 +140,11 @@ repo_roots`, and worktree / checkout launches stop with that message
 `owner/repo#42`); switching the workspace updates an unedited prompt. No
 "Move to" row,
 Rex session named after the repo. The `branch_template` and
-`prompt_template` settings apply to ClickUp tasks only. Folder names use the
+`prompt_template` settings apply to ClickUp tasks only;
+`issue_prompt_template` (e.g. `"Take issue {id}: {url}"`), when set,
+replaces both issue prompts, in a repo and in a scratch folder. Issue
+templates can use `{id}` (`repo#42`), `{full_id}`, `{number}`, `{title}`
+and `{url}`. Folder names use the
 ID with unsafe characters as `-` (`shop#42` → `shop-42`).
 
 On launch, in this order (stop at the first error, no rollback):
@@ -283,8 +287,8 @@ action runs (so `enter` can show a new one). No timers.
   a yellow warning in the flash line. Set values always win and are never
   detected or replaced.
 
-  A profile may override `repo_roots`, `scratch_root` and
-  `prompt_template`. Unknown settings, no profiles, or a profile name
+  A profile may override `repo_roots`, `scratch_root`, `prompt_template`
+  and `issue_prompt_template`. Unknown settings, no profiles, or a profile name
   other than letters, digits, `-` and `_` are errors at start.
 - **Which profile:** `huddle -p <name>` (an unknown name lists the valid
   ones); else the last used one (`~/.local/state/huddle/last_profile`);
