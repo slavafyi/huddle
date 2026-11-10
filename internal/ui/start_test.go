@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/slavafyi/huddle/internal/github"
 	"github.com/slavafyi/huddle/internal/run"
 	"github.com/slavafyi/huddle/internal/task"
@@ -312,5 +314,69 @@ func TestReposRescanAtStartAndInPanel(t *testing.T) {
 	}
 	if r, _ := e.app.start.repo(); r.Name != before.Name {
 		t.Errorf("selection moved: %q → %q", before.Name, r.Name)
+	}
+}
+
+// panelLines draws the open Start panel, one string per line, without the
+// border or styles.
+func panelLines(e *testEnv) []string {
+	var out []string
+	for _, l := range e.app.renderStart(60) {
+		out = append(out, strings.TrimRight(strings.Trim(ansi.Strip(l), "│"), " "))
+	}
+	return out
+}
+
+// G (SPEC §16.1): the title gets the full width, then one faint line with
+// the ID and status; the Rex line is never cut and the repo wraps.
+func TestPanelHeaderWithLongRepo(t *testing.T) {
+	e := withIssues(t)
+	selectIn(t, e, "3", task.Ref(github.IssuesSource, "acme/shop#42"))
+	e.press("enter")
+	p := e.app.start
+	long := "vite-plugin-example-import-maps-with-many-extra-words"
+	p.task.Name = "Preload tags can be left in the CSS relative asset paths"
+	p.task.Key, p.task.Project = long+"#28", long
+	p.repos[0].Name = long
+	p.session = ""
+	lines := panelLines(e)
+	if lines[1] != " Preload tags can be left in the CSS relative asset" || lines[2] != " paths" {
+		t.Errorf("title not full width:\n%s", strings.Join(lines[:4], "\n"))
+	}
+	// Too long for the line: the ID is cut in the middle, "#28 · open" stays.
+	if m := lines[3]; !strings.HasPrefix(m, " vite-plugin") || !strings.Contains(m, "…") || !strings.HasSuffix(m, "words#28 · open") {
+		t.Errorf("meta line = %q", m)
+	}
+	out := strings.Join(lines, "\n")
+	if strings.Count(out, "#28") != 1 || strings.Contains(out, long+" · open") {
+		t.Errorf("ID or project repeated:\n%s", out)
+	}
+	// The session name keeps both ends; "new session" gets its own line.
+	rex := lineWith(out, "Rex  ")
+	if !strings.Contains(rex, "vite-plugin-ex") || !strings.Contains(rex, "…") || !strings.HasSuffix(rex, "words › new tab") {
+		t.Errorf("rex line = %q", rex)
+	}
+	if !strings.Contains(out, "\n      new session\n") {
+		t.Errorf("no new session line:\n%s", out)
+	}
+	// The fixed repo wraps after '-' instead of being cut.
+	if !strings.Contains(out, "   vite-plugin-example-import-maps-with-many-extra-\n   words") {
+		t.Errorf("repo not wrapped:\n%s", out)
+	}
+}
+
+// A short session that fits keeps "· new session" on the Rex line; a
+// ClickUp task's meta line adds its client.
+func TestPanelHeaderClickUp(t *testing.T) {
+	e := newEnv(t)
+	e.load(t)
+	selectTask(t, e, "t2")
+	e.press("enter")
+	e.app.start.session = ""
+	out := strings.Join(panelLines(e), "\n")
+	for _, want := range []string{"\n DEV-7700 · to start · Snowcap\n", "Rex  Snowcap › new tab · new session"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q:\n%s", want, out)
+		}
 	}
 }

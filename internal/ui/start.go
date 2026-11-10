@@ -577,22 +577,26 @@ func (a *App) startLines(rows int) ([]string, int) {
 		return sFaint.Render(l)
 	}
 
-	// Title: wrapped under itself, up to 3 lines.
-	key := ansi.StringWidth(t.Key) + 1
-	title := strings.Split(ansi.Wrap(t.Name, inner-key, ""), "\n")
+	// Title first, full width, up to 3 lines; then one faint line with the
+	// ID and status (and the client for sources without a fixed repo, whose
+	// ID doesn't name it).
+	title := strings.Split(ansi.Wrap(t.Name, inner, ""), "\n")
 	if len(title) > 3 {
 		title = title[:3]
-		title[2] = ansi.Truncate(title[2], inner-key-1, "") + "…"
+		title[2] = ansi.Truncate(title[2], inner-1, "") + "…"
 	}
-	lines := []string{sCyan.Render(t.Key) + " " + sBold.Render(title[0])}
-	for _, l := range title[1:] {
-		lines = append(lines, strings.Repeat(" ", key)+sBold.Render(l))
+	var lines []string
+	for _, l := range title {
+		lines = append(lines, sBold.Render(l))
 	}
-	rex := sFaint.Render("Rex  ") + sBold.Render(t.Project) + sFaint.Render(" › new tab")
-	if p.session == "" {
-		rex += sFaint.Render(" · session created")
+	rest := " · " + t.Status
+	if !p.fixedRepo {
+		rest += " · " + t.Project
 	}
-	lines = append(lines, sFaint.Render(t.Project+" · "+t.Status), "", rex, "",
+	meta := midTrunc(t.Key, inner-ansi.StringWidth(rest)) + rest
+	lines = append(lines, sFaint.Render(meta), "")
+	lines = append(lines, rexLines(t.Project, p.session == "", inner)...)
+	lines = append(lines, "",
 		label(fWorkspace, "Workspace"),
 		"  "+opt(p.kind == workspace.Worktree, "worktree")+opt(p.kind == workspace.Checkout, "checkout")+opt(p.kind == workspace.Scratch, "scratch"), "")
 
@@ -607,7 +611,9 @@ func (a *App) startLines(rows int) ([]string, int) {
 	case p.fixedRepo:
 		lines = append(lines, sFaint.Render("  Repo"))
 		if r, ok := p.repo(); ok {
-			lines = append(lines, "  "+r.Name)
+			for _, l := range strings.Split(ansi.Wrap(r.Name, inner-2, "-"), "\n") {
+				lines = append(lines, "  "+l)
+			}
 		} else {
 			lines = append(lines, "  "+sRed.Render(p.noClone))
 		}
@@ -694,6 +700,32 @@ func (a *App) startLines(rows int) ([]string, int) {
 		lines[i] = ansi.Truncate(l, inner, "…")
 	}
 	return lines, len(lines) - tail
+}
+
+// rexLines is where the agent's tab opens: "Rex  {session} › new tab",
+// never cut. A session name too long for the line keeps both ends; for a
+// new session, "· new session" goes on its own line when it doesn't fit.
+func rexLines(session string, isNew bool, width int) []string {
+	const pre, post, note = "Rex  ", " › new tab", " · new session"
+	name := midTrunc(session, width-len(pre)-ansi.StringWidth(post))
+	line := sFaint.Render(pre) + sBold.Render(name) + sFaint.Render(post)
+	switch {
+	case !isNew:
+		return []string{line}
+	case ansi.StringWidth(line)+len(note) <= width:
+		return []string{line + sFaint.Render(note)}
+	}
+	return []string{line, sFaint.Render(strings.Repeat(" ", len(pre)) + "new session")}
+}
+
+// midTrunc shortens s to w cells by cutting its middle, so both ends stay.
+func midTrunc(s string, w int) string {
+	r := []rune(s)
+	if len(r) <= w || w < 3 {
+		return s
+	}
+	head := w / 2
+	return string(r[:head]) + "…" + string(r[len(r)-(w-1-head):])
 }
 
 // shortHome replaces the home folder with ~.

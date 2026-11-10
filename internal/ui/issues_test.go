@@ -176,7 +176,7 @@ func TestStartPanelForIssue(t *testing.T) {
 		}
 	}
 	out := plain(e)
-	for _, want := range []string{"shop#42 Fix checkout", "Repo", "shop", "shop › new tab"} {
+	for _, want := range []string{"│ Fix checkout", "shop#42 · open", "Repo", "shop", "shop › new tab"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("panel missing %q:\n%s", want, out)
 		}
