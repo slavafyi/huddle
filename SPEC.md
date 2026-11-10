@@ -223,7 +223,7 @@ height) and stop at the ends. All of these are listed in `?`.
   agent commands (`[agents]`), per-repo base branch (`[repos.base_branch]`).
 - **Schema:** `config.schema.json` in the repo root is a JSON Schema for
   this file (shared keys, `[agents]`, `[repos.base_branch]`, and profiles
-  with their keys and name rule). Taplo / Even Better TOML use it for checks
+  with their keys and name rule). tombi, Taplo and Even Better TOML use it for checks
   and completion when the file's first line points to it:
 
   ```toml
