@@ -247,7 +247,7 @@ func TestStartPanelFindsNewClone(t *testing.T) {
 }
 
 // issue_prompt_template replaces the built-in issue prompts, in a repo and
-// in a scratch folder; prompt_template (ClickUp) doesn't touch issues.
+// in a scratch folder; clickup_prompt_template doesn't touch issues.
 func TestIssuePrompt(t *testing.T) {
 	e := withIssues(t)
 	e.app.deps.Config.IssuePrompt = "Take issue {id}: {url}"

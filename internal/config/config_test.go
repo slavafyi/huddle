@@ -166,13 +166,13 @@ func TestUseAppliesProfileOverrides(t *testing.T) {
 	c, err := Load(write(t, `
 repo_roots = ["~/a"]
 scratch_root = "~/s"
-prompt_template = "shared {id}"
+clickup_prompt_template = "shared {id}"
 
 [work]
 [personal]
 repo_roots = ["~/oss"]
 scratch_root = "~/tmp"
-prompt_template = "Take issue {id}"
+clickup_prompt_template = "Take issue {id}"
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -278,5 +278,25 @@ issue_prompt_template = "Take issue {id}: {url}"
 	}
 	if p := c.Use(c.Profiles[1]); p.IssuePrompt != "Take issue {id}: {url}" {
 		t.Errorf("personal = %q", p.IssuePrompt)
+	}
+}
+
+// The ClickUp templates are clickup_*; the old names are unknown settings.
+func TestClickUpTemplateKeys(t *testing.T) {
+	c, err := Load(write(t, `
+clickup_branch_template = "b/{id}"
+clickup_prompt_template = "p {id}"
+[work]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.BranchTemplate != "b/{id}" || c.PromptTemplate != "p {id}" {
+		t.Errorf("templates = %q, %q", c.BranchTemplate, c.PromptTemplate)
+	}
+	for _, old := range []string{`prompt_template = "x"`, `branch_template = "x"`, "[work]\nprompt_template = \"x\""} {
+		if _, err := Load(write(t, old+"\n[p]\n")); err == nil {
+			t.Errorf("%q: want unknown setting error", old)
+		}
 	}
 }

@@ -20,12 +20,12 @@
       "type": "string",
       "default": "~/research"
     },
-    "branch_template": {
+    "clickup_branch_template": {
       "description": "Branch name for ClickUp tasks. {id_lower} is the task ID in lowercase, {slug} up to 5 lowercase ASCII words of the title.",
       "type": "string",
       "default": "feature/{id_lower}-{slug}"
     },
-    "prompt_template": {
+    "clickup_prompt_template": {
       "description": "Agent prompt for ClickUp tasks when the Start panel's prompt is empty. {id} is the task ID.",
       "type": "string",
       "default": "Take a task {id} from CU"
@@ -128,8 +128,8 @@
           "description": "Overrides the shared scratch_root for this profile.",
           "type": "string"
         },
-        "prompt_template": {
-          "description": "Overrides the shared prompt_template for this profile.",
+        "clickup_prompt_template": {
+          "description": "Overrides the shared clickup_prompt_template for this profile.",
           "type": "string"
         },
         "issue_prompt_template": {

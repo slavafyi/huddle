@@ -21,9 +21,9 @@ type Config struct {
 	RepoRoots        []string            `toml:"repo_roots"`
 	WorktreeRoot     string              `toml:"worktree_root"`
 	ScratchRoot      string              `toml:"scratch_root"`
-	BranchTemplate   string              `toml:"branch_template"`
-	PromptTemplate   string              `toml:"prompt_template"`       // ClickUp tasks
-	IssuePrompt      string              `toml:"issue_prompt_template"` // GitHub issues; "" means built-in
+	BranchTemplate   string              `toml:"clickup_branch_template"`
+	PromptTemplate   string              `toml:"clickup_prompt_template"` // ClickUp tasks
+	IssuePrompt      string              `toml:"issue_prompt_template"`   // GitHub issues; "" means built-in
 	ScratchTypes     []string            `toml:"scratch_task_types"`
 	ScratchPrefixes  []string            `toml:"scratch_title_prefixes"`
 	Agents           map[string][]string `toml:"agents"`
@@ -45,7 +45,7 @@ type Profile struct {
 	// Overrides of the shared settings.
 	RepoRoots      []string `toml:"repo_roots"`
 	ScratchRoot    string   `toml:"scratch_root"`
-	PromptTemplate string   `toml:"prompt_template"`
+	PromptTemplate string   `toml:"clickup_prompt_template"`
 	IssuePrompt    string   `toml:"issue_prompt_template"`
 }
 
