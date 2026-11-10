@@ -180,6 +180,9 @@ match → no task.
 `enter` on a PR opens a Rex tab with `gh pr diff`. GitHub refuses diffs
 over 20000 lines (HTTP 406); then the tab pages each file's patch from
 the PR files API (`gh api repos/{owner}/{repo}/pulls/{n}/files`) instead.
+With a profile `github_account`, the tab first reads that account's token
+itself (`gh auth token --user NAME`, as `GH_TOKEN`), so huddle never puts
+the token in the tab's command.
 
 ### 4.7 Cache
 
