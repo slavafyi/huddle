@@ -245,3 +245,24 @@ func TestStartPanelFindsNewClone(t *testing.T) {
 		t.Errorf("repo = %+v", r)
 	}
 }
+
+// issue_prompt_template replaces the built-in issue prompts, in a repo and
+// in a scratch folder; prompt_template (ClickUp) doesn't touch issues.
+func TestIssuePrompt(t *testing.T) {
+	e := withIssues(t)
+	e.app.deps.Config.IssuePrompt = "Take issue {id}: {url}"
+	e.app.deps.Config.PromptTemplate = "clickup {id}"
+	selectIn(t, e, "3", task.Ref(github.IssuesSource, "acme/shop#42"))
+	e.press("enter")
+	p := e.app.start
+	want := "Take issue shop#42: https://github.com/acme/shop/issues/42"
+	if p.prompt != want {
+		t.Errorf("repo prompt = %q", p.prompt)
+	}
+	for p.kind != workspace.Scratch {
+		e.press("right")
+	}
+	if p.prompt != want {
+		t.Errorf("scratch prompt = %q", p.prompt)
+	}
+}

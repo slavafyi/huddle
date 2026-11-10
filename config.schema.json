@@ -30,6 +30,10 @@
       "type": "string",
       "default": "Take a task {id} from CU"
     },
+    "issue_prompt_template": {
+      "description": "Agent prompt for GitHub issues when the Start panel's prompt is empty, in a repo or a scratch folder. {id} is repo#42, {full_id} owner/repo#42, {number} 42, {title} the title, {url} the issue URL. Without it: \"Take an issue #{number}\" in a repo, \"Take an issue {full_id}\" in a scratch folder.",
+      "type": "string"
+    },
     "scratch_task_types": {
       "description": "ClickUp task types that start in a scratch folder by default.",
       "type": "array",
@@ -126,6 +130,10 @@
         },
         "prompt_template": {
           "description": "Overrides the shared prompt_template for this profile.",
+          "type": "string"
+        },
+        "issue_prompt_template": {
+          "description": "Overrides the shared issue_prompt_template for this profile.",
           "type": "string"
         }
       },

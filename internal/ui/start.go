@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/slavafyi/huddle/internal/github"
 	"github.com/slavafyi/huddle/internal/launch"
 	"github.com/slavafyi/huddle/internal/rex"
 	"github.com/slavafyi/huddle/internal/store"
@@ -198,6 +199,9 @@ func (a *App) defaultPrompt(t task.Task, k workspace.Kind) string {
 	tmpl := cmp.Or(r.PromptTemplate, a.deps.Config.PromptTemplate)
 	if k == workspace.Scratch && r.ScratchPromptTemplate != "" {
 		tmpl = r.ScratchPromptTemplate
+	}
+	if t.Source == github.IssuesSource && a.deps.Config.IssuePrompt != "" {
+		tmpl = a.deps.Config.IssuePrompt // the same in a repo and in scratch
 	}
 	return workspace.Expand(tmpl, templateVars(t))
 }

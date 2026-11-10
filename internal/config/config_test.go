@@ -260,3 +260,23 @@ func TestOtherOrgs(t *testing.T) {
 		t.Errorf("a profile with orgs excludes nothing: %v", got)
 	}
 }
+
+// issue_prompt_template is shared, and a profile may override it.
+func TestIssuePrompt(t *testing.T) {
+	c, err := Load(write(t, `
+issue_prompt_template = "shared #{number}"
+
+[work]
+[personal]
+issue_prompt_template = "Take issue {id}: {url}"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := c.Use(c.Profiles[0]); w.IssuePrompt != "shared #{number}" {
+		t.Errorf("work = %q", w.IssuePrompt)
+	}
+	if p := c.Use(c.Profiles[1]); p.IssuePrompt != "Take issue {id}: {url}" {
+		t.Errorf("personal = %q", p.IssuePrompt)
+	}
+}
