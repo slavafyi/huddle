@@ -11,6 +11,38 @@ archives:
       - goos: windows
         formats: [zip]
 
+changelog:
+  use: github
+  sort: asc
+  format: >-
+    {{ $m := trimprefix .Message (printf "%s: " (index (split .Message ": ") 0)) -}}
+    {{ toupper (slice $m 0 1) }}{{ slice $m 1 }}
+    {{- if .Logins }} &nbsp;-&nbsp; by {{ .Logins | englishJoin }}{{ end }}
+    [<samp>({{ slice .SHA 0 5 }})</samp>](https://github.com/slavafyi/huddle/commit/{{ .SHA }})
+  groups:
+    - title: "&nbsp;&nbsp;&nbsp;🚨 Breaking Changes"
+      regexp: '^\w+(\(.+\))?!:'
+      order: 0
+    - title: "&nbsp;&nbsp;&nbsp;🚀 Features"
+      regexp: '^feat(\(.+\))?:'
+      order: 1
+    - title: "&nbsp;&nbsp;&nbsp;🐞 Bug Fixes"
+      regexp: '^fix(\(.+\))?:'
+      order: 2
+    - title: "&nbsp;&nbsp;&nbsp;🏎 Performance"
+      regexp: '^perf(\(.+\))?:'
+      order: 3
+  filters:
+    include:
+      - '^(feat|fix|perf)(\(.+\))?!?:'
+
+release:
+  # Served at releases/latest/download/config.schema.json for #:schema.
+  extra_files:
+    - glob: config.schema.json
+  footer: >-
+    {{ if .PreviousTag }}##### &nbsp;&nbsp;&nbsp;&nbsp;[View changes on GitHub](https://github.com/slavafyi/huddle/compare/{{ .PreviousTag }}...{{ .Tag }}){{ end }}
+
 homebrew_casks:
   - description: Terminal UI for ClickUp tasks, GitHub issues and PRs, and coding agents in Rex
     homepage: https://github.com/slavafyi/huddle
