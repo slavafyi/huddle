@@ -91,7 +91,7 @@ func TestNarrowWidthShrinksFixedColumns(t *testing.T) {
 
 // Titles at column 2, rows from column 4, › on the selected row; the
 // selection is a full-width grey (ANSI 8) background that keeps colors
-// and turns faint text normal (SPEC §4.8).
+// and turns faint text normal.
 func TestListLayoutAndSelection(t *testing.T) {
 	l := &list{cols: []column{{width: 4}, {}, {width: 6}}}
 	l.setSections([]section{{title: "a", rows: []row{

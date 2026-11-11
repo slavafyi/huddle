@@ -327,7 +327,7 @@ func panelLines(e *testEnv) []string {
 	return out
 }
 
-// G (SPEC §16.1): the title gets the full width, then one faint line with
+// Panel header: the title gets the full width, then one faint line with
 // the ID and status; the Rex line is never cut and the repo wraps.
 func TestPanelHeaderWithLongRepo(t *testing.T) {
 	e := withIssues(t)

@@ -26,7 +26,7 @@ const selBG = "\x1b[100m"
 
 // selected draws s as the selected row, the same in every list, picker and
 // panel: a grey background across width cells. Colors stay; faint text
-// turns normal so it stays readable on grey (SPEC §4.8).
+// turns normal so it stays readable on grey.
 func selected(s string, width int) string {
 	s = strings.ReplaceAll(s, "\x1b[2m", "")
 	s = strings.ReplaceAll(s, "\x1b[m", "\x1b[m"+selBG)

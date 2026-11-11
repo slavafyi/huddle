@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "huddle config",
-  "description": "~/.config/huddle/config.toml (SPEC.md §5). Top-level keys are shared settings; every other top-level table is a profile.",
+  "description": "~/.config/huddle/config.toml. Top-level keys are shared settings; every other top-level table is a profile.",
   "type": "object",
   "properties": {
     "repo_roots": {

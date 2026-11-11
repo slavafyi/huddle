@@ -78,7 +78,7 @@ func clientSession(sessions map[string]string, stored, client string) string {
 	return found
 }
 
-// Open prepares the folder and opens the agent's tab (SPEC §4.4 steps 1–2).
+// Open prepares the folder and opens the agent's tab.
 // It stops at the first error, with no rollback. The caller saves the
 // returned agent record (step 3) before calling Apply (step 4).
 func Open(ctx context.Context, d Deps, p Plan) (Result, error) {

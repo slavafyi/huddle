@@ -25,8 +25,7 @@ var _ task.Source = (*Issues)(nil)
 // Name implements task.Source.
 func (s *Issues) Name() string { return IssuesSource }
 
-// Rules are GitHub's Today groups, filter labels and Start panel defaults
-// (SPEC §4.2–§4.4).
+// Rules are GitHub's Today groups, filter labels and Start panel defaults.
 func (s *Issues) Rules() task.Rules {
 	return task.Rules{
 		Groups:         []string{task.GroupInProgress, task.GroupInReview, task.GroupOpen, task.GroupDone},

@@ -74,7 +74,7 @@ type Status struct {
 	Done  bool // moving here closes the task
 }
 
-// Rules are a source's status words and view settings (SPEC §4.2–§4.4).
+// Rules are a source's status words and view settings.
 // Zero values give ClickUp's behavior.
 type Rules struct {
 	Active  []string // assigned to me: In progress

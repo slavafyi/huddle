@@ -40,7 +40,7 @@ type tabEntry struct {
 	list *taskView // for TabTasks
 }
 
-// Refresh timing (SPEC §4.7).
+// Refresh timing.
 const (
 	tickEvery        = 15 * time.Second
 	syncEvery        = 2 * time.Minute // tasks and PRs, together

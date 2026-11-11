@@ -34,7 +34,7 @@ var _ task.Source = (*Source)(nil)
 // Name implements task.Source.
 func (s *Source) Name() string { return SourceName }
 
-// Rules are ClickUp's status words (SPEC §4.2, §4.4).
+// Rules are ClickUp's status words.
 func (s *Source) Rules() task.Rules {
 	r := task.Rules{
 		Active:    []string{"in progress", "feedbacks"},

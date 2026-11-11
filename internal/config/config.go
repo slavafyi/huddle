@@ -211,7 +211,7 @@ func expandAll(paths []string) []string {
 // Validate reports settings that must be fixed in the file.
 func (c Config) Validate() error {
 	if len(c.Profiles) == 0 {
-		return fmt.Errorf("no profiles in %s: add a table such as [work] (see SPEC.md §5)", Path())
+		return fmt.Errorf("no profiles in %s: add a table such as [work]", Path())
 	}
 	for _, p := range c.Profiles {
 		if !validName(p.Name) {

@@ -321,7 +321,7 @@ func (a *App) startKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-// arrow handles an arrow key inside the current field (SPEC §16.1).
+// arrow handles an arrow key inside the current field.
 func (p *startPanel) arrow(k string) {
 	back := k == "up" || k == "left"
 	d := 1
@@ -439,8 +439,8 @@ func (a *App) launch() tea.Cmd {
 	}
 }
 
-// onOpened records the agent as soon as its tab exists (SPEC §4.4 step 3),
-// then starts the task writes (step 4).
+// onOpened records the agent as soon as its tab exists,
+// then starts the task writes.
 func (a *App) onOpened(m openedMsg) tea.Cmd {
 	id := m.plan.Task.Ref()
 	panel := a.lastStart[id]
@@ -545,7 +545,7 @@ func (a *App) renderStart(height int) []string {
 	return titledBox(lines, panelWidth, "Start")
 }
 
-// startLines are the panel's lines with a prompt rows tall (SPEC §16.1),
+// startLines are the panel's lines with a prompt rows tall,
 // and how many lines at the end (checkboxes and Launch) must always show.
 func (a *App) startLines(rows int) ([]string, int) {
 	p, t := a.start, a.start.task

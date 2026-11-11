@@ -14,7 +14,7 @@ type IDs struct {
 	Lead      string `json:"lead,omitempty"`
 }
 
-// Detector finds the IDs the config leaves out (SPEC §5). Found IDs are
+// Detector finds the IDs the config leaves out. Found IDs are
 // passed to Save and come back as Saved on the next start, so a normal
 // start makes no extra calls.
 type Detector struct {
