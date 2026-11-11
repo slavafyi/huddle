@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>huddle demo</title>
+<meta name="description" content="huddle: a terminal UI for ClickUp tasks, GitHub issues, PRs and coding agents in Rex. Interactive demo with made-up data.">
+<style>
+  /* The app uses only the 16 ANSI colors plus bold / faint / reverse.
+     These values stand in for a terminal theme in dark and light mode. */
+  :root {
+    --page: #0b0b0b; --page-fg: #e8e8e8; --page-dim: #8a8a8a; --btn: #1a1a1a; --btn-line: #2c2c2c;
+    --win-line: #2e2e2e; --bar: #1b1b1b; --bar-fg: #d6d6d6; --bar-dim: #7c7c7c; --tab-ic: #2b2b2b;
+    --bg: #101010; --fg: #f2f2f2;
+    --red: #ff7676; --green: #86cd82; --yellow: #d6c06b; --blue: #777777;
+    --magenta: #c79bd8; --cyan: #8ccfd0; --sel: #50585d;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --page: #e9e8e3; --page-fg: #1a1a1a; --page-dim: #6d6c68; --btn: #f6f5f1; --btn-line: #d6d5cf;
+      --win-line: #cfcec8; --bar: #efeee9; --bar-fg: #2a2a2a; --bar-dim: #8d8c87; --tab-ic: #dddcd6;
+      --bg: #faf9f5; --fg: #101010;
+      --red: #ca0043; --green: #407f00; --yellow: #8a6a00; --blue: #666666;
+      --magenta: #8a3fa0; --cyan: #1f7a7c; --sel: #969ba5;
+    }
+  }
+  :root[data-theme="light"] {
+    --page: #e9e8e3; --page-fg: #1a1a1a; --page-dim: #6d6c68; --btn: #f6f5f1; --btn-line: #d6d5cf;
+    --win-line: #cfcec8; --bar: #efeee9; --bar-fg: #2a2a2a; --bar-dim: #8d8c87; --tab-ic: #dddcd6;
+    --bg: #faf9f5; --fg: #101010;
+    --red: #ca0043; --green: #407f00; --yellow: #8a6a00; --blue: #666666;
+    --magenta: #8a3fa0; --cyan: #1f7a7c; --sel: #969ba5;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--page-fg); font: 14px/1.5 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  .page { max-width: 1040px; margin: 0 auto; padding: 28px 16px 40px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .lead { color: var(--page-dim); margin: 0 0 18px; max-width: 70ch; }
+  .lead code, .help code { font: 12px ui-monospace, "SF Mono", Menlo, monospace; color: var(--page-fg); }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 14px; }
+  .grp { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .grp > span { color: var(--page-dim); font-size: 13px; margin-right: 2px; }
+  button { background: var(--btn); color: var(--page-fg); border: 1px solid var(--btn-line); border-radius: 7px; padding: 4px 11px; font: 13px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  button.on { border-color: var(--page-fg); font-weight: 600; }
+  .help { color: var(--page-dim); font-size: 13px; margin-top: 14px; }
+
+  /* Rex window */
+  .win { border: 1px solid var(--win-line); border-radius: 10px; overflow: hidden; background: var(--bg); }
+  .titlebar { display: flex; align-items: center; height: 38px; padding: 0 12px 0 14px; background: var(--bar); color: var(--bar-fg); font-size: 13px; gap: 22px; }
+  .lights { display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .wtab { display: flex; align-items: center; gap: 7px; white-space: nowrap; font-weight: 500; }
+  .wtab svg { flex: none; }
+  .wtab .tic { width: 18px; height: 16px; border-radius: 4px; background: var(--tab-ic); display: grid; place-items: center; }
+  .tright { margin-left: auto; display: flex; gap: 16px; color: var(--bar-fg); }
+  .blockbar { display: flex; align-items: center; height: 30px; padding: 0 12px; color: var(--fg); font-size: 12.5px; gap: 6px; background: var(--bg); }
+  .blockbar .bright { margin-left: auto; display: flex; gap: 12px; color: var(--fg); opacity: .28; }
+
+  /* Terminal: one line = one div, every cell 1ch wide */
+  .term { padding: 2px 12px 10px; background: var(--bg); overflow-x: auto; }
+  .scr { --W: 120; position: relative; font-family: "SF Mono", ui-monospace, Menlo, "JetBrains Mono", monospace;
+         font-size: 12px; line-height: 1.25; color: var(--fg);
+         width: calc(var(--W) * 1ch); white-space: pre; outline: none; cursor: default; }
+  .scr div { height: 1.25em; overflow: hidden; }
+  .f { opacity: .5; } .b { font-weight: 700; }
+  .red { color: var(--red); } .green { color: var(--green); } .yellow { color: var(--yellow); }
+  .blue { color: var(--blue); } .magenta { color: var(--magenta); } .cyan { color: var(--cyan); }
+  .sel { background: var(--sel); } .sel .f, .f.sel { opacity: 1; }
+  .launch { background: var(--magenta); color: var(--bg); font-weight: 700; }
+  .scr .ov { position: absolute; background: var(--bg); height: auto; overflow: visible; }
+  .ov div { height: 1.25em; }
+  [data-row], [data-tab] { cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>huddle</h1>
+  <p class="lead">A terminal UI, run in a Rex tab, for working on ClickUp tasks and GitHub issues with their PRs, and for starting a coding agent on a task in one step. This is an interactive demo with made-up data: click the window and use the keys.</p>
+
+  <div class="bar">
+    <div class="grp"><span>Profile</span><span id="profs" style="display:contents"></span></div>
+    <div class="grp"><span>Try</span><span id="tries" style="display:contents"></span></div>
+    <div class="grp" style="margin-left:auto"><span>Theme</span><span id="themes" style="display:contents"></span></div>
+  </div>
+
+  <div class="win">
+    <div class="titlebar">
+      <div class="lights"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+      <div class="wtab">
+        <svg width="16" height="15" viewBox="0 0 16 15" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="3" width="13" height="10.5" rx="2"/><path d="M3.5 1h9"/></svg>
+        Daily Work
+      </div>
+      <div class="wtab">
+        <span class="tic"><svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 1.5l3 3-3 3M5.5 7.5H10"/></svg></span>
+        <span id="tabtitle">Huddle · work</span>
+      </div>
+      <div class="tright">
+        <svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 7s3-5.5 8-5.5S17 7 17 7s-3 5.5-8 5.5S1 7 1 7z"/><circle cx="9" cy="7" r="2.3"/></svg>
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5 5h5v5H5zM5 5V3.5A1.5 1.5 0 1 0 3.5 5H5M10 5V3.5A1.5 1.5 0 1 1 11.5 5H10M5 10v1.5A1.5 1.5 0 1 1 3.5 10H5M10 10v1.5a1.5 1.5 0 1 0 1.5-1.5H10"/></svg>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 1v12M1 7h12"/></svg>
+      </div>
+    </div>
+    <div class="blockbar">
+      <svg width="14" height="10" viewBox="0 0 14 10" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 1.5l3.5 3.5L1 8.5M6.5 8.5H13"/></svg>
+      <span id="blocktitle">Huddle · work</span>
+      <div class="bright">
+        <svg width="15" height="13" viewBox="0 0 15 13" fill="none" stroke="currentColor" stroke-width="1.2"><rect x=".6" y=".6" width="13.8" height="11.8" rx="2"/><path d="M7.5 1v11"/></svg>
+        <svg width="15" height="13" viewBox="0 0 15 13" fill="none" stroke="currentColor" stroke-width="1.2"><rect x=".6" y=".6" width="13.8" height="11.8" rx="2"/><path d="M1 6.5h13"/></svg>
+        <svg width="15" height="13" viewBox="0 0 15 13" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y=".6" width="11.4" height="9" rx="1.5"/><path d="M.6 3.5v7.4a1.5 1.5 0 0 0 1.5 1.5H11"/></svg>
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M7.5 1H12v4.5M12 1L7 6M5.5 12H1V7.5M1 12l5-5"/></svg>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 1l10 10M11 1L1 11"/></svg>
+      </div>
+    </div>
+    <div class="term"><div class="scr" id="scr" tabindex="0" aria-label="huddle terminal demo"></div></div>
+  </div>
+
+  <p class="help">Keys: <code>1–5</code> / <code>tab</code> views · <code>j</code> <code>k</code> move · <code>gg</code> <code>G</code> top / bottom · <code>enter</code> start or focus · <code>shift+enter</code> Start panel · <code>s</code> status · <code>t</code> filter · <code>P</code> profile · <code>`</code> last profile · <code>?</code> keys · <code>esc</code> close</p>
+</div>
+
+<script>
+const W = 120, H = 38, PW = 54;
+
+// ---------- text runs ----------
+// A line is a list of runs [text, class]. Widths count characters; every
+// glyph used here is one cell wide.
+const len = s => [...s].length;
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const T = (t, c = '') => [[t, c]];
+const runsLen = rs => rs.reduce((n, r) => n + len(r[0]), 0);
+function cut(rs, w, ell = true) {
+  if (runsLen(rs) <= w) return rs;
+  const out = []; let n = 0;
+  for (const [t, c] of rs) {
+    const ch = [...t];
+    if (n + ch.length <= w - (ell ? 1 : 0)) { out.push([t, c]); n += ch.length; continue; }
+    const keep = w - (ell ? 1 : 0) - n;
+    out.push([ch.slice(0, Math.max(0, keep)).join('') + (ell ? '…' : ''), c]);
+    return out;
+  }
+  return out;
+}
+const pad = (rs, w) => { rs = cut(rs, w); const n = w - runsLen(rs); return n > 0 ? [...rs, [' '.repeat(n), '']] : rs; };
+const html = rs => rs.map(([t, c]) => c ? `<span class="${c}">${esc(t)}</span>` : esc(t)).join('');
+const words = (s, w) => { const out = []; let cur = ''; for (const x of s.split(' ')) { if (len((cur + ' ' + x).trim()) > w && cur) { out.push(cur); cur = x; } else cur = (cur + ' ' + x).trim(); } out.push(cur); return out; };
+
+// ---------- made-up data ----------
+const ST = { 'to plan': 'f', 'to start': 'green', 'in progress': 'blue', 'to review': 'yellow', 'feedbacks': 'red', 'pending': 'f', 'to publish': 'cyan', 'published': 'b', 'Closed': 'green', 'open': 'green', 'closed': 'green' };
+const AG = { working: ['● working', 'yellow'], blocked: ['! needs input', 'red'], done: ['✓ done', 'green'] };
+const AGT = { working: ['● agent working', 'yellow'], blocked: ['! needs input', 'red'], done: ['✓ agent done', 'green'] };
+const dueCls = d => d === 'today' ? 'yellow' : /^Nov [1-9]$|^Nov 10$|^Oct/.test(d) ? 'red' : '';
+const prioMark = p => p === 'urgent' ? T('!! ', 'red b') : p === 'high' ? T('! ', 'yellow b') : [];
+
+// ClickUp tasks (work profile)
+const tasks = [
+  { id: 'DEV-7808', title: 'Compare preorder apps', client: 'Harbor and Goods', status: 'in progress', due: 'Nov 3', with: 'you', agent: 'working', ws: 'scratch · ~/code/agency/notes/dev-7808-compare-preorder-apps', msg: 'Comparing preorder app APIs…', age: '24m', type: 'Idea' },
+  { id: 'DEV-7100', title: 'Launch referral program', client: 'Harbor and Goods', status: 'in progress', due: 'Nov 2', prio: 'urgent', with: 'you', agent: 'blocked', ws: 'checkout · ~/code/agency/shops/harbor-and-goods', msg: 'Use the referral app or a custom page template?', age: '1h' },
+  { id: 'DEV-7093', title: 'Add analytics consent tag', client: 'Pinecone', status: 'to start', due: 'today', with: 'you' },
+  { id: 'DEV-7053', title: 'Research low stock notifications and timing', client: 'Snowcap', status: 'to start', due: 'today', with: 'you', agent: 'done', ws: 'scratch · ~/code/agency/notes/dev-7053-research-low-stock-notifications', msg: 'Wrote findings.md', age: '2h' },
+  { id: 'DEV-7701', title: 'Promo: homepage personalisation', client: 'Snowcap', status: 'to start', due: 'Nov 19', with: 'you' },
+  { id: 'DEV-7703', title: 'Promo: product and cart page personalisation', client: 'Snowcap', status: 'to start', due: 'Nov 23', with: 'you' },
+  { id: 'DEV-7829', title: 'Fix blank nav collections tabs', client: 'Cobalt', status: 'to plan', with: 'nobody', lead: true },
+  { id: 'DEV-7827', title: 'Add filters to search page', client: 'Cobalt', status: 'to plan', prio: 'high', with: 'nobody', lead: true },
+  { id: 'DEV-7301', title: 'Build new theme', client: 'Maple Teas', status: 'to review', with: 'Malcolm', lead: true },
+  { id: 'DEV-8062', title: 'Update shipping email template', client: 'Daisy Lane Shop', status: 'to review', with: 'Malcolm', lead: true },
+  { id: 'DEV-7324', title: 'Pause subscriptions on sold-out items', client: 'Snowcap', status: 'pending', with: 'Malcolm', lead: true },
+  { id: 'DEV-7304', title: 'Add language switcher', client: 'Snowcap', status: 'pending', with: 'Malcolm', lead: true },
+  { id: 'DEV-7142', title: 'Import old form entries', client: 'Rosewood Studios', status: 'Closed', closed: 'Nov 9', with: 'you' },
+  { id: 'DEV-7090', title: 'Fix cart drawer totals', client: 'Snowcap', status: 'Closed', closed: 'Nov 6', with: 'you' },
+];
+const repos = { Snowcap: ['snowcap-theme', 'snowcap-subscriptions-app', 'snowcap-subscriptions-api', 'snowcap-discount-by-tag', 'snowcap-age-check-app'], Pinecone: ['pinecone-theme'], Cobalt: ['cobalt-theme', 'cobalt-search'], 'Harbor and Goods': ['harbor-and-goods'], 'Maple Teas': ['maple-teas-theme'], 'Daisy Lane Shop': ['daisy-lane-theme'], 'Rosewood Studios': ['rosewood-forms'] };
+const sessions = ['Harbor and Goods', 'Snowcap', 'trek'];
+
+// GitHub issues
+const issues = {
+  work: [
+    { repo: 'snowcap', n: 49, title: 'Account portal: pause, skip next order and frequency picker', labels: '', age: '3d', with: 'nobody', lead: true, pr: '#50' },
+    { repo: 'snowcap-subscriptions-api', n: 15, title: 'Read shipping rates from a new carrier', labels: 'enhancement', age: '2d', with: 'you', lead: true },
+    { repo: 'snowcap-subscriptions-api', n: 4, title: 'Bulk add creates empty lines', labels: 'bug', age: '9d', with: 'nobody', lead: true },
+    { repo: 'sharp-ink-print-app', n: 23, title: 'Print files can be a few pixels short of the paper size', labels: 'bug', age: '1d', with: 'nobody', lead: true },
+    { repo: 'sharp-ink-print-app', n: 22, title: 'Large uploads time out during conversion', labels: 'bug', age: '1d', with: 'nobody', lead: true },
+    { repo: 'sharp-ink-print-app', n: 16, title: 'Update build tools', labels: 'enhancement', age: '5d', with: 'nobody', lead: true },
+  ],
+  personal: [
+    { repo: 'trek', n: 42, title: 'Sync offline queue on reconnect', labels: 'bug', age: '3h', with: 'you', agent: 'working', ws: 'worktree · ~/code/home/trek/42', msg: 'Adding a retry queue test…', group: 'In progress' },
+    { repo: 'journal', n: 26, title: 'Vocabulary learning mode', labels: 'feature', age: '12d', with: 'you', pr: '#27', group: 'In review' },
+    { repo: 'journal', n: 18, title: 'Daily note import breaks on emoji', labels: 'bug, priority:urgent', prio: 'urgent', age: '1d', with: 'you', group: 'Open' },
+    { repo: 'trek', n: 45, title: 'Dark mode for the map view', labels: 'ui', age: '6d', with: 'nobody', lead: true, group: 'Open' },
+    { repo: 'dotfiles', n: 7, title: 'Add auth fallback', labels: 'feature', age: '4d', with: 'you', group: 'Open' },
+    { repo: 'trek', n: 40, title: 'Crash when location permission is denied', labels: 'bug', age: '5d', with: 'you', closed: 'Nov 6', group: 'Done this week' },
+  ],
+};
+issues.work.forEach(i => { i.owner = 'vertexdigital'; i.status = 'open'; });
+issues.personal.forEach(i => { i.owner = 'slavafyi'; i.status = i.closed ? 'closed' : 'open'; });
+const iid = i => `${i.repo}#${i.n}`;
+
+const prs = {
+  work: [
+    { g: 'Mine', n: 14, title: 'Referral email and landing page template', repo: 'harbor-and-goods', task: 'DEV-7100', ci: ['● 2/4', 'yellow'], review: ['draft', 'f'], age: '30m', branch: 'feature/dev-7100-launch-referral-program', by: 'slavafyi' },
+    { g: 'Mine', n: 9, title: 'New theme base', repo: 'maple-teas-theme', task: 'DEV-7301', ci: ['✓ pass', 'green'], review: ['approved', 'green'], age: '2d', branch: 'feature/dev-7301-build-new-theme', by: 'slavafyi' },
+    { g: 'Mine', n: 50, title: 'Account portal: pause and skip', repo: 'snowcap', task: 'snowcap#49', ci: ['✗ fail', 'red'], review: ['waiting', 'f'], age: '3d', branch: 'feature/49-account-portal', by: 'slavafyi' },
+    { g: 'Review requested', n: 22, title: 'Auto-label new orders', repo: 'daisy-lane-delivery', task: 'DEV-8259', ci: ['✓ pass', 'green'], review: ['you', 'yellow'], age: '5h', branch: 'feature/dev-8259-auto-label', by: 'malcolm-dev' },
+  ],
+  personal: [
+    { g: 'Mine', n: 27, title: 'Vocabulary learning mode', repo: 'journal', task: '#26', ci: ['✓ pass', 'green'], review: ['waiting', 'f'], age: '1d', branch: 'feature/26-vocabulary-learning-mode', by: 'slavafyi' },
+    { g: 'Mine', n: 43, title: 'Sync offline queue on reconnect', repo: 'trek', task: '#42', ci: ['● 1/3', 'yellow'], review: ['draft', 'f'], age: '10m', branch: 'feature/42-sync-offline-queue', by: 'slavafyi' },
+  ],
+};
+const profiles = { work: 'ClickUp · vertexdigital', personal: 'GitHub · slavafyi' };
+
+// ---------- screens ----------
+// A screen: { sub, head?, cols, groups: [{ name, cls, note, rows: [{ cells, detail, item }] }] }
+const taskDetail = t => [
+  T(t.title, 'b'),
+  [[t.id, ''], [' · ', 'f'], [t.status, ST[t.status]], [' · ', 'f'], [t.client, ''], ...(t.type ? [[' · ', 'f'], [t.type, '']] : []), [' · ', 'f'], [t.prio || 'normal', '']],
+  [['with ', ''], [t.with, ''], [' · lead: ', ''], [t.lead ? 'you' : 'Malcolm', ''], ...(t.due ? [[' · due ', ''], [t.due, dueCls(t.due) || '']] : t.closed ? [[' · closed ', ''], [t.closed, 'f']] : [])],
+  T('https://app.clickup.com/t/86' + t.id.slice(4).toLowerCase() + 'abc', 'f'),
+];
+const issueDetail = i => [
+  T(i.title, 'b'),
+  [[iid(i), ''], [' · ', 'f'], [i.status, ST[i.status]], [' · ', 'f'], [i.repo, ''], ...(i.labels ? [[' · ', 'f'], [i.labels, 'f']] : [])],
+  [['with ', ''], [i.with, ''], [' · lead: ', ''], [i.lead ? 'you' : 'someone else', ''], ...(i.pr ? [[' · PR ', ''], [i.pr, '']] : [])],
+  T(`https://github.com/${i.owner}/${i.repo}/issues/${i.n}`, 'f'),
+];
+
+function today(p) {
+  if (p === 'personal') {
+    const g = name => issues.personal.filter(i => i.group === name);
+    const row = i => ({ item: i, cells: [T('#' + i.n, 'f'), [...prioMark(i.prio), [i.title, '']], T(i.repo), i.closed ? T(i.closed, 'f') : T(i.age, 'f'), i.agent ? T(...AGT[i.agent]) : i.closed ? T('✓ closed', 'green') : i.pr ? T('PR ' + i.pr, 'f') : []], detail: issueDetail(i) });
+    const groups = [['In progress'], ['In review'], ['Open', 'assigned to you, or opened by you with nobody assigned'], ['Done this week']].map(([n, note]) => ({ name: n, note, rows: g(n).map(row) }));
+    return { sub: summary(groups), cols: [12, 0, 22, 12, 17], groups };
+  }
+  const row = (t, mid) => ({ item: t, cells: [T(t.id, 'f'), [...prioMark(t.prio), [t.title, '']], T(t.client), mid, t.agent ? T(...AGT[t.agent]) : t.closed ? T('✓ Closed', 'green') : []], detail: taskDetail(t) });
+  const mine = t => t.with === 'you';
+  const groups = [
+    { name: 'In progress', rows: tasks.filter(t => mine(t) && t.status === 'in progress').map(t => row(t, T(t.due, dueCls(t.due)))) },
+    { name: 'Up next', rows: tasks.filter(t => mine(t) && t.status === 'to start').map(t => row(t, T(t.due, dueCls(t.due)))) },
+    { name: 'Waiting on others', note: 'you are lead, task is with someone else', rows: tasks.filter(t => t.lead && !mine(t) && ['to review', 'pending', 'to publish'].includes(t.status)).map(t => row(t, T(t.status, ST[t.status]))) },
+    { name: 'Done this week', rows: tasks.filter(t => t.closed).map(t => row(t, T(t.closed, 'f'))) },
+  ];
+  return { sub: summary(groups), cols: [12, 0, 22, 14, 17], groups };
+}
+function summary(groups) {
+  const parts = groups.map(g => `${g.rows.length} ${g.name === 'Waiting on others' ? 'waiting' : g.name.toLowerCase()}`);
+  return T(['Wed, Nov 11', ...parts].join(' · '), 'f');
+}
+const FILTERS = { work: ['Mine + Lead', 'Assigned', 'Lead only'], personal: ['All', 'Assigned', 'Opened by me'] };
+function filterBar(names, counts) { const out = []; names.forEach((n, i) => { if (i) out.push(['   ', '']); out.push([`${n} ${counts[i]}`, i === state.filter ? 'b' : 'f']); }); return out; }
+
+function taskList() {
+  const keep = [t => !t.closed, t => !t.closed && t.with === 'you', t => !t.closed && t.lead && t.with !== 'you'];
+  const counts = keep.map(f => tasks.filter(f).length);
+  const order = ['to plan', 'to start', 'in progress', 'to review', 'feedbacks', 'pending', 'to publish', 'published'];
+  const shown = tasks.filter(keep[state.filter]);
+  const groups = order.map(s => ({ name: s, cls: ST[s], rows: shown.filter(t => t.status === s).map(t => ({ item: t, detail: taskDetail(t),
+    cells: [T(t.id, 'f'), [...prioMark(t.prio), [t.title, ''], ...(t.agent ? [['  ' + AG[t.agent][0], AG[t.agent][1]]] : [])], T(t.client), t.due ? T(t.due, dueCls(t.due)) : T('—', 'f')] })) })).filter(g => g.rows.length);
+  return { sub: filterBar(FILTERS.work, counts), head: ['ID', 'TITLE', 'CLIENT', 'DUE'], cols: [12, 0, 20, 8], groups };
+}
+function issueList(p) {
+  const all = issues[p].filter(i => !i.closed);
+  const keep = [() => true, i => i.with === 'you', i => i.lead];
+  const counts = keep.map(f => all.filter(f).length);
+  const shown = all.filter(keep[state.filter]);
+  const byRepo = [...new Set(shown.map(i => i.repo))];
+  const groups = byRepo.map(r => ({ name: r, rows: shown.filter(i => i.repo === r).map(i => ({ item: i, detail: issueDetail(i),
+    cells: [T('#' + i.n, 'f'), [...prioMark(i.prio), [i.title, ''], ...(i.agent ? [['  ' + AG[i.agent][0], AG[i.agent][1]]] : [])], i.labels ? T(i.labels) : [], T(i.age)] })) }));
+  return { sub: filterBar(FILTERS.personal, counts), head: ['ID', 'TITLE', 'LABELS', 'UPDATED'], cols: [8, 0, 22, 8], groups };
+}
+function prList(p) {
+  const list = prs[p];
+  const groups = ['Mine', 'Review requested'].map(g => ({ name: g, rows: list.filter(x => x.g === g).map(x => ({ item: x,
+    cells: [T('#' + x.n, 'f'), T(x.title), T(x.repo), T(x.task, 'cyan'), T(...x.ci), T(...x.review), T(x.age)],
+    detail: [[['#' + x.n + ' ', 'b'], [x.title, 'b']], [[`${p === 'work' ? 'vertexdigital' : 'slavafyi'}/${x.repo}`, ''], [' · ', 'f'], [x.branch, '']], [['by ' + x.by, ''], [' · CI ', ''], x.ci, [' · review ', ''], x.review], T(`https://github.com/${p === 'work' ? 'vertexdigital' : 'slavafyi'}/${x.repo}/pull/${x.n}`, 'f')] })) })).filter(g => g.rows.length);
+  const mine = list.filter(x => x.g === 'Mine').length;
+  return { sub: T(`${mine} mine · ${list.length - mine} review requested`, 'f'), head: ['#', 'TITLE', 'REPO', p === 'work' ? 'TASK' : 'ISSUE', 'CI', 'REVIEW', 'AGE'], cols: [8, 0, 20, 12, 10, 10, 5], groups };
+}
+function agentList(p) {
+  const items = p === 'work' ? tasks.filter(t => t.agent).map(t => ({ key: t.id, title: t.title, session: t.client, ...t }))
+    : issues.personal.filter(i => i.agent).map(i => ({ key: '#' + i.n, session: i.repo, ...i }));
+  const closed = p === 'work' ? [{ key: 'DEV-7142', title: 'Import old form entries', session: 'Rosewood Studios', age: '22h', ws: 'checkout · ~/code/agency/shops/rosewood-forms' }] : [];
+  const row = (a, st) => ({ item: a, cells: [T(a.key, 'f'), T(a.title), T(a.session), st, T(a.age)],
+    detail: [[[a.key + ' ', 'b'], [a.title, 'b']], T(a.ws), st[0] ? [['claude · ', ''], st[0], [' · session ' + a.session, '']] : [['claude · closed · session ' + a.session, '']], T(a.msg || '', 'f')] });
+  const groups = [['Needs input', 'blocked'], ['Working', 'working'], ['Done', 'done']].map(([n, s]) => ({ name: n, rows: items.filter(a => a.agent === s).map(a => row(a, T(...AG[s]))) }))
+    .concat([{ name: 'Closed', rows: closed.map(a => row(a, T('closed', 'f'))) }]).filter(g => g.rows.length);
+  return { sub: T(`${items.length + closed.length} agents started by huddle`, 'f'), head: [p === 'work' ? 'TASK' : 'ISSUE', 'TITLE', 'SESSION', 'STATE', 'AGE'], cols: [12, 0, 20, 16, 6], groups };
+}
+
+const VIEWS = { work: [['Today', today], ['Tasks', taskList], ['Issues', issueList], ['PRs', prList], ['Agents', agentList]],
+                personal: [['Today', today], ['Issues', issueList], ['PRs', prList], ['Agents', agentList]] };
+
+// ---------- state ----------
+const state = { prof: 'work', view: 0, sel: 0, filter: 0, overlay: null, pick: 0, field: 0, flash: null, lastProf: 'personal', g: false };
+const screen = () => { const [, f] = VIEWS[state.prof][state.view]; return f(state.prof); };
+const rowsOf = s => s.groups.flatMap(g => g.rows);
+
+// ---------- drawing ----------
+function listLines(s, width, height) {
+  const fixed = s.cols.reduce((a, b) => a + b, 0);
+  const cols = s.cols.map(c => c || Math.max(10, width - 4 - fixed));
+  const rowRuns = (cells, sel) => {
+    const out = [[sel ? '›' : ' ', sel ? '' : 'f'], ['   ', '']];
+    cells.forEach((c, i) => out.push(...pad(c, cols[i] - 2), ['  ', '']));
+    return pad(out, width);
+  };
+  const lines = []; let i = 0, selLine = 0;
+  if (s.head) { lines.push({ rs: pad([['    ', ''], ...s.head.flatMap((h, k) => pad(T(h, 'f'), cols[k]))], width) }); lines.push({ rs: [] }); }
+  const top = lines.length;
+  s.groups.forEach((g, gi) => {
+    if (gi) lines.push({ rs: [] });
+    lines.push({ rs: [['  ', ''], [g.name, g.cls ?? 'b'], [' ' + g.rows.length, 'f'], ...(g.note ? [[' · ' + g.note, 'f']] : [])] });
+    g.rows.forEach(r => { const sel = i === state.sel; if (sel) selLine = lines.length; lines.push({ rs: rowRuns(r.cells, sel), sel, row: i }); i++; });
+  });
+  if (!s.groups.length) lines.push({ rs: T('  nothing here', 'f') });
+  // keep the cursor in view
+  const body = lines.slice(top);
+  const room = height - top;
+  let off = 0;
+  if (selLine - top >= room) off = selLine - top - room + 2;
+  return [...lines.slice(0, top), ...body.slice(off, off + room)];
+}
+
+function draw() {
+  const s = screen(), rows = rowsOf(s);
+  state.sel = Math.max(0, Math.min(state.sel, rows.length - 1));
+  const panel = state.overlay === 'start';
+  const lw = panel ? W - PW - 1 : W;
+  const out = [];
+  // header
+  const tabs = []; VIEWS[state.prof].forEach(([n], i) => { if (i) tabs.push(['   ', '']); tabs.push([`${i + 1} ${n}`, i === state.view ? 'b' : 'f']); });
+  const right = [['synced 40s ago', 'f'], ['  ', ''], ['huddle', 'b'], [' · ', 'f'], [state.prof, 'b']];
+  out.push({ rs: [...tabs, [' '.repeat(Math.max(1, W - runsLen(tabs) - runsLen(right))), ''], ...right], tabs: true });
+  out.push({ rs: T('─'.repeat(W), 'f') });
+  out.push({ rs: s.sub });
+  out.push({ rs: [] });
+  const bodyH = H - 4 - 6;
+  const body = listLines(s, lw, bodyH);
+  for (let k = 0; k < bodyH; k++) out.push(body[k] || { rs: [] });
+  // detail
+  out.push({ rs: T('─'.repeat(W), 'f') });
+  const d = rows[state.sel]?.detail || [];
+  for (let k = 0; k < 4; k++) out.push({ rs: cut(d[k] || [], W) });
+  const fl = state.flash ? [[state.flash[0], state.flash[1]]] : [];
+  out.push({ rs: [...fl, [' '.repeat(Math.max(1, W - runsLen(fl) - 6)), ''], ['? keys', 'f']] });
+
+  let h = out.map((l, n) => {
+    if (l.tabs) {
+      let x = '', k = 0; VIEWS[state.prof].forEach(([nm], i) => { if (i) x += '   '; x += `<span data-tab="${i}" class="${i === state.view ? 'b' : 'f'}">${i + 1} ${esc(nm)}</span>`; });
+      return `<div>${x}${html(l.rs.slice(tabs.length))}</div>`;
+    }
+    if (l.row !== undefined) return `<div data-row="${l.row}"${l.sel ? ' class="sel"' : ''}>${html(l.rs)}</div>`;
+    return `<div>${html(l.rs)}</div>`;
+  }).join('');
+
+  const ov = overlay(s, rows);
+  if (ov) h += `<div class="ov" style="left:${ov.x}ch;top:${ov.y * 1.25}em">${ov.lines.map(l => `<div>${html(l)}</div>`).join('')}</div>`;
+  document.getElementById('scr').innerHTML = h;
+  const title = 'Huddle · ' + state.prof;
+  document.getElementById('tabtitle').textContent = title;
+  document.getElementById('blocktitle').textContent = title;
+  document.querySelectorAll('#profs button').forEach(b => b.classList.toggle('on', b.dataset.p === state.prof));
+}
+
+// A box with round corners, optional title in the top border.
+function box(lines, w, title) {
+  const inner = w - 4;
+  const top = title ? [['╭─ ', 'f'], [title, 'b'], [' ' + '─'.repeat(w - 5 - len(title)) + '╮', 'f']] : T('╭' + '─'.repeat(w - 2) + '╮', 'f');
+  // The cursor row gets the grey background inside the borders only.
+  const mid = lines.map(l => {
+    const rs = pad(l.rs || l, inner);
+    return [['│ ', 'f'], ...(l.sel ? rs.map(([t, c]) => [t, (c + ' sel').trim()]) : rs), [' │', 'f']];
+  });
+  return [top, ...mid, T('╰' + '─'.repeat(w - 2) + '╯', 'f')];
+}
+
+function overlay(s, rows) {
+  const o = state.overlay;
+  if (!o) return null;
+  if (o === 'help') return { x: Math.floor((W - 70) / 2), y: 3, lines: box(helpLines(), 70) };
+  if (o === 'profile') {
+    const names = [state.prof, ...Object.keys(profiles).filter(n => n !== state.prof)];
+    const ls = [[['Profile', 'b'], [' · ▏', 'f']]];
+    names.forEach((n, i) => { const left = [[`${i + 1} `, 'f'], [n === state.prof ? '●' : ' ', 'green'], [' ' + n, '']]; const rt = T(profiles[n], 'f'); ls.push({ rs: [...left, [' '.repeat(48 - runsLen(left) - runsLen(rt)), ''], ...rt], sel: i === state.pick }); });
+    return { x: Math.floor((W - 52) / 2), y: 3, lines: box(ls, 52) };
+  }
+  if (o === 'status') {
+    const r = rows[state.sel].item;
+    const names = Object.keys(ST).filter(n => !['open', 'closed'].includes(n));
+    const ls = [[['Status', 'b'], [' · ' + r.id, 'f']]];
+    names.forEach((n, i) => ls.push({ rs: [[`${i + 1} `, 'f'], ['■', ST[n] === 'f' ? 'f' : ST[n] === 'b' ? '' : ST[n]], [' ' + n, ''], ...(n === r.status ? [[' (current)', 'f']] : [])], sel: i === state.pick }));
+    return { x: Math.floor((W - 44) / 2), y: 3, lines: box(ls, 44) };
+  }
+  if (o === 'start') return { x: W - PW, y: 2, lines: box(startLines(rows[state.sel].item), PW, 'Start') };
+}
+
+function helpLines() {
+  const v = VIEWS[state.prof][state.view][0];
+  const keys = {
+    Today: [['j/k ctrl+n/p', 'move'], ['gg / G', 'top / bottom'], ['ctrl+d/u', 'page down / up'], ['enter', 'start / focus agent'], ['shift+enter', 'start another agent'], ['s', 'status'], ['c', 'comment'], ['a', 'assign me'], ['o / p', 'open task / PR']],
+    Tasks: [['j/k ctrl+n/p', 'move'], ['gg / G', 'top / bottom'], ['ctrl+d/u', 'page down / up'], ['enter', 'start / focus agent'], ['shift+enter', 'start another agent'], ['s', 'status'], ['c', 'comment'], ['a', 'assign me'], ['o / p', 'open task / PR'], ['t', 'filter']],
+    Issues: [['j/k ctrl+n/p', 'move'], ['gg / G', 'top / bottom'], ['ctrl+d/u', 'page down / up'], ['enter', 'start / focus agent'], ['s', 'close / reopen'], ['c', 'comment'], ['a', 'assign me'], ['o', 'open on GitHub'], ['t', 'filter']],
+    PRs: [['j/k ctrl+n/p', 'move'], ['gg / G', 'top / bottom'], ['ctrl+d/u', 'page down / up'], ['enter', 'diff in a Rex tab'], ['o', 'open on GitHub']],
+    Agents: [['j/k ctrl+n/p', 'move'], ['gg / G', 'top / bottom'], ['ctrl+d/u', 'page down / up'], ['enter', 'focus tab'], ['x', 'close tab'], ['X', 'clean merged']],
+  }[v];
+  const k = ([a, b]) => [['  ' + a + ' '.repeat(Math.max(1, 13 - len(a))), ''], [b, 'f']];
+  const left = [T(v, 'b'), ...keys.map(k)];
+  const kk = ([a, b]) => [['  ' + a + ' '.repeat(Math.max(1, 13 - len(a))), ''], [b, 'f']];
+  const startKeys = ['Today', 'Tasks', 'Issues'].includes(v) ? [T('Start panel', 'b'), ...[['tab ctrl+n/p', 'next/prev field'], ['space / ←→', 'change value'], ['↑↓', 'move in list'], ['enter', 'launch'], ['esc', 'close']].map(kk), []] : [];
+  const right = [...startKeys, T('Anywhere', 'b'), ...[['tab / 1–' + VIEWS[state.prof].length, 'switch view'], ['P', 'switch profile'], ['`', 'last profile'], ['r', 'refresh'], ['?', 'keys'], ['q', 'quit']].map(kk)];
+  const n = Math.max(left.length, right.length), out = [];
+  for (let i = 0; i < n; i++) out.push([...pad(left[i] || [], 36), ...(right[i] || [])]);
+  out.push([], T('any key closes', 'f'));
+  return out;
+}
+
+function startLines(t) {
+  const inner = PW - 4;
+  const issue = t.n !== undefined;
+  const id = issue ? iid(t) : t.id;
+  const client = issue ? t.repo : t.client;
+  const research = !issue && (t.type === 'Idea' || /^(Research|Evaluate|Investigate|Check|Audit)\b/.test(t.title));
+  const kinds = ['worktree', 'checkout', 'scratch'];
+  const kind = state.ws ?? (research ? 2 : 1);
+  const slug = t.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').split('-').slice(0, 5).join('-');
+  const low = issue ? String(t.n) : t.id.toLowerCase();
+  const fields = ['Workspace', kind === 2 ? 'Folder' : 'Repo', ...(kind === 0 ? ['Branch'] : []), 'Agent', 'Prompt'];
+  const lab = (i, s) => state.field === i ? T('› ' + s, 'b') : T('  ' + s, 'f');
+  const radio = (on, s, w) => [...(on ? [['●', 'green'], [' ' + s, '']] : [['○ ' + s, 'f']]), [' '.repeat(Math.max(1, w - len(s) - 2)), '']];
+  const out = [...words(t.title, inner).slice(0, 3).map(x => T(x, 'b')),
+    T(`${id} · ${t.status}` + (issue ? '' : ` · ${client}`), 'f'), [],
+    [['Rex  ', 'f'], [client, 'b'], [' › new tab' + (sessions.includes(client) ? '' : ' · new session'), 'f']], [],
+    lab(0, 'Workspace'), [['  ', ''], ...kinds.flatMap((k, i) => radio(kind === i, k, 12))], []];
+  let fi = 1;
+  if (kind === 2) out.push(T('  Folder', 'f'), T('  ~/code/agency/notes/', 'f'), T('  ' + low + '-' + slug), []), fi++;
+  else if (issue) out.push(T('  Repo', 'f'), T('  ' + t.repo), []), fi++;
+  else {
+    const list = repos[client] || [client.toLowerCase().replace(/\s+/g, '-')];
+    out.push(lab(fi++, 'Repo'), ...list.slice(0, 3).map((r, i) => i ? T('    ' + r, 'f') : [['  ', ''], ['› ' + r, 'b']]), T(list.length > 3 ? `    +${list.length - 3} more · type to filter` : '    type to filter', 'f'), []);
+  }
+  if (kind === 0) { out.push(lab(fi++, 'Branch'), T(`  feature/${low}-${slug}`), T('  ' + '┄'.repeat(inner - 2), 'f'), []); }
+  const agents = ['claude', 'codex', 'pi', 'opencode', 'cursor', 'shell'];
+  out.push(lab(fi++, 'Agent'), [['  ', ''], ...agents.slice(0, 3).flatMap((a, i) => radio(i === 0, a, 12))], [['  ', ''], ...agents.slice(3).flatMap(a => radio(false, a, 12))], []);
+  const prompt = issue ? (kind === 2 ? `Take an issue ${t.owner}/${iid(t)}` : `Take an issue #${t.n}`) : `Take a task ${t.id} from CU`;
+  out.push(lab(fi++, 'Prompt'), ...[0, 1, 2, 3].map(i => T('  ' + (words(prompt, inner - 2)[i] || ''))), T('  ' + '┄'.repeat(inner - 2), state.field === fi - 1 ? '' : 'f'));
+  if (!issue && ['to plan', 'to start'].includes(t.status)) out.push(T('  [x] Move to in progress', 'f'));
+  if (t.with !== 'you') out.push(T(`  [x] Assign to me (now: ${t.with})`, 'f'));
+  out.push([], [[' ', ''], [' Launch ⏎ ', 'launch']]);
+  state.fields = fi;
+  return out;
+}
+
+// ---------- input ----------
+function setFlash(t, c = 'green') { state.flash = [t, c]; }
+function go(v) { state.view = v; state.sel = 0; state.filter = 0; state.overlay = null; }
+function setProf(p) { if (p !== state.prof) state.lastProf = state.prof; state.prof = p; go(0); }
+function enter(shift) {
+  const s = screen(), r = rowsOf(s)[state.sel]; if (!r) return;
+  const v = VIEWS[state.prof][state.view][0];
+  if (v === 'PRs') return setFlash(`→ opened gh pr diff for #${r.item.n} in a new Rex tab`);
+  if (v === 'Agents') return setFlash(`→ focused tab ${r.item.key} in Rex session ${r.item.session}`);
+  if (r.item.agent && !shift) return setFlash(`→ focused tab ${r.item.id || '#' + r.item.n} in Rex session ${r.item.client || r.item.repo}`);
+  if (r.item.closed) return setFlash('task is closed', 'f');
+  state.overlay = 'start'; state.field = 0; state.ws = undefined;
+}
+
+function key(e) {
+  const k = e.key, s = screen(), n = rowsOf(s).length;
+  const views = VIEWS[state.prof].length;
+  state.flash = null;
+  const o = state.overlay;
+  if (o === 'help') { state.overlay = null; return true; }
+  if (o === 'profile' || o === 'status') {
+    const opts = o === 'profile' ? Object.keys(profiles).length : 9;
+    if (k === 'Escape') state.overlay = null;
+    else if (k === 'j' || k === 'ArrowDown' || (e.ctrlKey && k === 'n')) state.pick = (state.pick + 1) % opts;
+    else if (k === 'k' || k === 'ArrowUp' || (e.ctrlKey && k === 'p')) state.pick = (state.pick + opts - 1) % opts;
+    else if (k === 'Enter' || /^[1-9]$/.test(k)) {
+      const i = /^[1-9]$/.test(k) ? +k - 1 : state.pick;
+      if (o === 'profile') { const names = [state.prof, ...Object.keys(profiles).filter(x => x !== state.prof)]; if (names[i]) setProf(names[i]); state.overlay = null; }
+      else { const r = rowsOf(s)[state.sel].item, names = Object.keys(ST).filter(x => !['open', 'closed'].includes(x)); if (names[i]) { r.status = names[i]; setFlash(`${r.id} → ${names[i]}`); } state.overlay = null; }
+    } else return false;
+    return true;
+  }
+  if (o === 'start') {
+    if (k === 'Escape') state.overlay = null;
+    else if (k === 'Tab' || (e.ctrlKey && (k === 'n' || k === 'p'))) { const d = (e.shiftKey || k === 'p') ? -1 : 1; state.field = (state.field + d + state.fields) % state.fields; }
+    else if (state.field === 0 && ['ArrowRight', 'ArrowDown', ' ', 'ArrowLeft', 'ArrowUp'].includes(k)) { const cur = state.ws ?? startKind(); state.ws = (cur + (['ArrowLeft', 'ArrowUp'].includes(k) ? 2 : 1)) % 3; }
+    else if (k === 'Enter') { const r = rowsOf(s)[state.sel].item; state.overlay = null; setFlash(`→ started claude in a new Rex tab: ${r.id || '#' + r.n} ${r.title}`); }
+    else return false;
+    return true;
+  }
+  if (k === '?') state.overlay = 'help';
+  else if (k === 'P') { state.overlay = 'profile'; state.pick = 1; }
+  else if (k === '`') setProf(state.lastProf);
+  else if (k === 'Tab') go((state.view + (e.shiftKey ? views - 1 : 1)) % views);
+  else if (/^[1-9]$/.test(k) && +k <= views) go(+k - 1);
+  else if (k === 'j' || k === 'ArrowDown' || (e.ctrlKey && k === 'n')) state.sel = (state.sel + 1) % n;
+  else if (k === 'k' || k === 'ArrowUp' || (e.ctrlKey && k === 'p')) state.sel = (state.sel + n - 1) % n;
+  else if (k === 'G') state.sel = n - 1;
+  else if (k === 'g') { if (state.g) { state.sel = 0; state.g = false; } else { state.g = true; return true; } }
+  else if (e.ctrlKey && k === 'd') state.sel = Math.min(n - 1, state.sel + 10);
+  else if (e.ctrlKey && k === 'u') state.sel = Math.max(0, state.sel - 10);
+  else if (k === 't' && ['Tasks', 'Issues'].includes(VIEWS[state.prof][state.view][0])) { state.filter = (state.filter + 1) % 3; state.sel = 0; }
+  else if (k === 's' && state.prof === 'work' && ['Today', 'Tasks'].includes(VIEWS[state.prof][state.view][0])) { const r = rowsOf(s)[state.sel].item; state.overlay = 'status'; state.pick = Object.keys(ST).indexOf(r.status); }
+  else if (k === 'Enter') enter(e.shiftKey);
+  else if (k === 'r') setFlash('synced just now', 'f');
+  else if (k === 'Escape') {}
+  else return false;
+  state.g = false;
+  return true;
+}
+function startKind() { const r = rowsOf(screen())[state.sel].item; return r.n === undefined && (r.type === 'Idea' || /^(Research|Evaluate|Investigate|Check|Audit)\b/.test(r.title)) ? 2 : 1; }
+
+const scr = document.getElementById('scr');
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.altKey) return;
+  if (e.target.closest('button') && (e.key === 'Enter' || e.key === ' ')) return;
+  if (key(e)) { e.preventDefault(); draw(); }
+});
+scr.addEventListener('click', e => {
+  const t = e.target.closest('[data-tab]'), r = e.target.closest('[data-row]');
+  if (t) { go(+t.dataset.tab); draw(); } else if (r && !state.overlay) { state.sel = +r.dataset.row; state.flash = null; draw(); }
+});
+
+// page controls
+document.getElementById('profs').innerHTML = Object.keys(profiles).map(p => `<button data-p="${p}">${p}</button>`).join('');
+document.getElementById('profs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { setProf(b.dataset.p); draw(); scr.focus(); } });
+const tries = [['Start panel', () => { go(state.prof === 'work' ? 1 : 1); state.sel = 2; enter(true); }], ['Status', () => { setProf('work'); go(1); state.sel = 2; key({ key: 's' }); }], ['Profile', () => key({ key: 'P' })], ['Keys', () => { state.overlay = 'help'; }]];
+document.getElementById('tries').innerHTML = tries.map(([n], i) => `<button data-i="${i}">${n}</button>`).join('');
+document.getElementById('tries').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { state.overlay = null; tries[+b.dataset.i][1](); draw(); scr.focus(); } });
+document.getElementById('themes').innerHTML = [['', 'System'], ['dark', 'Dark'], ['light', 'Light']].map(([t, n]) => `<button data-t="${t}">${n}</button>`).join('');
+function setTheme(t) {
+  if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  document.querySelectorAll('#themes button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  try { localStorage.setItem('huddle-demo-theme', t); } catch {}
+}
+document.getElementById('themes').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTheme(b.dataset.t); });
+let saved = ''; try { saved = localStorage.getItem('huddle-demo-theme') || ''; } catch {}
+setTheme(saved);
+
+// Size the font so W columns fill the window, like a terminal of that width.
+function fit() {
+  const probe = document.createElement('span');
+  probe.textContent = '0'.repeat(100);
+  probe.style.cssText = 'position:absolute;visibility:hidden;font-size:100px;white-space:pre';
+  scr.appendChild(probe);
+  const ratio = probe.getBoundingClientRect().width / 100 / 100;
+  probe.remove();
+  scr.style.fontSize = Math.max(7, (scr.parentElement.clientWidth - 24) / (W * ratio)) + 'px';
+}
+addEventListener('resize', fit);
+draw();
+fit();
+</script>
+</body>
+</html>
