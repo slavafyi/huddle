@@ -1,5 +1,8 @@
 # huddle
 
+[![Release](https://github.com/slavafyi/huddle/actions/workflows/release.yml/badge.svg)](https://github.com/slavafyi/huddle/actions/workflows/release.yml)
+[![Demo](https://github.com/slavafyi/huddle/actions/workflows/demo.yml/badge.svg)](https://github.com/slavafyi/huddle/actions/workflows/demo.yml)
+
 A terminal UI, run in a Rex tab, for working on ClickUp tasks and GitHub
 issues with their PRs, and for starting a coding agent on a task in one step.
 
@@ -25,7 +28,6 @@ issues with their PRs, and for starting a coding agent on a task in one step.
 
 ## Requirements
 
-- macOS. Linux and Windows builds are released too, but they are untested.
 - Rex (with Remote Control on to focus agent tabs)
 - `gh`, logged in
 - A ClickUp API token for profiles with `clickup = true`: `CLICKUP_API_TOKEN`
@@ -50,7 +52,7 @@ go install github.com/slavafyi/huddle/cmd/huddle@latest
 1. Create `~/.config/huddle/config.toml` with at least one profile:
 
    ```toml
-   #:schema file:///path/to/huddle/config.schema.json
+   #:schema https://github.com/slavafyi/huddle/releases/latest/download/config.schema.json
 
    [work]
    clickup     = true
@@ -60,10 +62,6 @@ go install github.com/slavafyi/huddle/cmd/huddle@latest
    [personal]
    repo_roots = ["~/code/home"]
    ```
-
-   [`config.schema.json`](config.schema.json) gives checks and completion in
-   tombi, Taplo or Even Better TOML. [`docs/SPEC.md`](docs/SPEC.md) §5 lists
-   every setting.
 
 2. Run it inside a Rex tab:
 

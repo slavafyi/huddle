@@ -84,3 +84,12 @@ tests flaky.
 **Decision:** when `gh pr diff` fails on a big PR, page each file's
 patch from the PR files API.
 **Why:** GitHub refuses diffs over 20000 lines (HTTP 406).
+
+## Config schema from the latest release; config changes only add
+
+**Decision:** `#:schema` points to the schema in the latest GitHub
+release, and within a major version config changes only add settings.
+**Why:** a URL can't know the installed version. With add-only changes,
+the newest released schema covers every config of that major version;
+pointing at `main` would show unreleased settings, and a pinned tag goes
+stale after the first minor release.

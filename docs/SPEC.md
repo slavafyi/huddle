@@ -311,14 +311,20 @@ action runs (so `enter` can show a new one). No timers.
 - **Schema:** `config.schema.json` in the repo root is a JSON Schema for
   this file (shared keys, `[agents]`, `[repos.base_branch]`, and profiles
   with their keys and name rule). tombi, Taplo and Even Better TOML use it
-  for checks and completion when the file's first line points to it:
+  for checks and completion when the file's first line points to it. Each
+  release uploads the schema, so this URL always gives the newest released
+  one:
 
   ```toml
-  #:schema file:///path/to/huddle/config.schema.json
+  #:schema https://github.com/slavafyi/huddle/releases/latest/download/config.schema.json
   ```
 
   A test fails when the schema's keys and the `toml` tags on `Config`,
   `Repos` and `Profile` differ; change both together.
+- **Compatibility:** a config that works with `vX.Y.Z` works with every
+  later `vX.*`. Within a major version, config changes only add settings
+  (with defaults that keep the old behavior); removing or renaming a
+  setting, or changing what a value means, needs a major release.
 - **Agents:** built-in commands for claude, codex, pi, opencode, cursor
   and shell. `[agents]` adds or replaces them:
 
@@ -425,8 +431,9 @@ git tag -s v1.0.1 && git push origin main v1.0.1   # release
 **Releases:** the version lives only in git tags `vX.Y.Z` (first:
 `v1.0.0`) and is built into the binary (`huddle -version`). Pushing a tag
 starts `.github/workflows/release.yml`, which runs GoReleaser
-(`.goreleaser.yaml`): archives for every platform, `checksums.txt`, the
-GitHub release with notes from the commits, and the `huddle` cask in
+(`.goreleaser.yaml`): archives for every platform, `checksums.txt`,
+`config.schema.json`, the GitHub release with notes from the commits, and
+the `huddle` cask in
 `slavafyi/homebrew-tap` (secret `HOMEBREW_TAP_GITHUB_TOKEN`).
 
 ## 8. Structure
