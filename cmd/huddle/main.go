@@ -22,9 +22,17 @@ import (
 	"github.com/slavafyi/huddle/internal/ui"
 )
 
+// version is set at release build time with -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	profile := flag.String("p", "", "start in this profile (default: the last used one)")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("huddle", version)
+		return
+	}
 	if err := runApp(*profile); err != nil {
 		fmt.Fprintln(os.Stderr, "huddle:", err)
 		os.Exit(1)
