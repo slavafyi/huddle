@@ -26,7 +26,12 @@ they are: [`DECISIONS.md`](DECISIONS.md).
 panel, Agents, PRs, profiles, background refresh with cache.
 
 **Out:** creating or editing tasks, time tracking, other people's tasks,
-merging or approving PRs, Linux/Windows.
+merging or approving PRs.
+
+**Platforms:** macOS is the one tested platform. Releases also ship Linux
+and Windows builds (amd64, arm64), but they are **untested**: Rex on
+Linux and Windows is in early alpha, and the ClickUp token comes only
+from `CLICKUP_API_TOKEN` there (the keychain is macOS only).
 
 ## 3. Domain facts
 
@@ -413,7 +418,16 @@ action runs (so `enter` can show a new one). No timers.
 go run ./cmd/huddle      # run inside a Rex tab
 go test ./...            # must pass before commit
 go vet ./... && gofmt -l .   # must be clean / print nothing
+go run github.com/goreleaser/goreleaser/v2@v2.20.1 release --snapshot --clean  # test build → dist/
+git tag -s v1.0.1 && git push origin main v1.0.1   # release
 ```
+
+**Releases:** the version lives only in git tags `vX.Y.Z` (first:
+`v1.0.0`) and is built into the binary (`huddle -version`). Pushing a tag
+starts `.github/workflows/release.yml`, which runs GoReleaser
+(`.goreleaser.yaml`): archives for every platform, `checksums.txt`, the
+GitHub release with notes from the commits, and the `huddle` cask in
+`slavafyi/homebrew-tap` (secret `HOMEBREW_TAP_GITHUB_TOKEN`).
 
 ## 8. Structure
 
@@ -429,6 +443,7 @@ internal/launch/     launch steps: folder, Rex tab, records
 internal/run/        runs external commands (fake runner in tests)
 internal/store/      cache + state files
 internal/ui/         Bubble Tea views
+demo/                static demo page (GitHub Pages)
 ```
 
 The UI never runs commands or HTTP itself. It calls the packages above

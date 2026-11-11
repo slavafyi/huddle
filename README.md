@@ -3,6 +3,14 @@
 A terminal UI, run in a Rex tab, for working on ClickUp tasks and GitHub
 issues with their PRs, and for starting a coding agent on a task in one step.
 
+**[Try the demo](https://slavafyi.github.io/huddle/)** (in the browser, with made-up data)
+
+> [!NOTE]
+> **Personal project.** huddle is built for my own workflow, with only the
+> features I use. The code is open source in case it's useful to someone,
+> but I can't promise to accept feature requests or pull requests. If you
+> want it to work differently, fork it and make it yours.
+
 ## What it does
 
 - Today view: in progress, up next, waiting on others, done this week
@@ -17,11 +25,25 @@ issues with their PRs, and for starting a coding agent on a task in one step.
 
 ## Requirements
 
-- macOS, Go 1.26
+- macOS. Linux and Windows builds are released too, but they are untested.
 - Rex (with Remote Control on to focus agent tabs)
 - `gh`, logged in
 - A ClickUp API token for profiles with `clickup = true`: `CLICKUP_API_TOKEN`
-  or the keychain item `huddle-clickup`
+  or, on macOS, the keychain item `huddle-clickup`
+
+## Install
+
+```sh
+brew install slavafyi/tap/huddle
+```
+
+Or download an archive from
+[Releases](https://github.com/slavafyi/huddle/releases), or build from source
+with Go 1.26:
+
+```sh
+go install github.com/slavafyi/huddle/cmd/huddle@latest
+```
 
 ## Getting started
 
@@ -46,24 +68,58 @@ issues with their PRs, and for starting a coding agent on a task in one step.
 2. Run it inside a Rex tab:
 
    ```sh
-   go run ./cmd/huddle            # last used profile
-   go run ./cmd/huddle -p work    # a given profile
+   huddle            # last used profile
+   huddle -p work    # a given profile
    ```
 
 Press `?` in the app for keys.
 
-## Common commands
+## Development
 
-- `go run ./cmd/huddle` - run the app
-- `go build -o bin/huddle ./cmd/huddle` - build a binary
-- `go test ./...` - run the tests
-- `go vet ./... && gofmt -l .` - check the code
+Needs Go 1.26.
+
+```sh
+go run ./cmd/huddle              # run from source, inside a Rex tab
+go test ./...                    # tests
+go vet ./... && gofmt -l .       # checks; gofmt must print nothing
+```
+
+### Build
+
+```sh
+go build -o bin/huddle ./cmd/huddle    # this machine
+
+# every platform into dist/, as a release would (nothing is published)
+go run github.com/goreleaser/goreleaser/v2@v2.20.1 release --snapshot --clean
+```
+
+### Release
+
+The version is the git tag (`vX.Y.Z`). Pushing a tag starts the release
+workflow: it runs the tests, builds archives for every platform, creates
+the GitHub release with notes from the commits, and updates the Homebrew
+cask in [slavafyi/homebrew-tap](https://github.com/slavafyi/homebrew-tap).
+
+```sh
+git tag -s v1.0.1 -m v1.0.1
+git push origin main v1.0.1
+```
+
+Use a patch bump for fixes, minor for features, major for breaking
+changes. The workflow needs the `HOMEBREW_TAP_GITHUB_TOKEN` secret: a
+fine-grained token with Contents read and write on the tap.
 
 ## Documentation
 
 - [`docs/SPEC.md`](docs/SPEC.md) - behavior and config
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) - why things work the way they do
-- [`demo/index.html`](demo/index.html) - look, layout and keys
+- [Demo](https://slavafyi.github.io/huddle/) - look, layout and keys
+
+## How it was built
+
+huddle is fully coded by AI, with Claude Code. I write the spec, make the
+design decisions and use it every day; the code itself is written by the
+agent.
 
 ## License
 
