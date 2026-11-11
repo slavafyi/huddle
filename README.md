@@ -40,8 +40,8 @@ issues with their PRs, and for starting a coding agent on a task in one step.
    ```
 
    [`config.schema.json`](config.schema.json) gives checks and completion in
-   tombi, Taplo or Even Better TOML. [`SPEC.md`](SPEC.md) §5 lists every
-   setting.
+   tombi, Taplo or Even Better TOML. [`docs/SPEC.md`](docs/SPEC.md) §5 lists
+   every setting.
 
 2. Run it inside a Rex tab:
 
@@ -61,7 +61,9 @@ Press `?` in the app for keys.
 
 ## Documentation
 
-- [`SPEC.md`](SPEC.md) - behavior, config and design decisions
+- [`docs/SPEC.md`](docs/SPEC.md) - behavior and config
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) - why things work the way they do
+- [`demo/index.html`](demo/index.html) - look, layout and keys
 
 ## License
 

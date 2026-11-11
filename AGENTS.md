@@ -12,5 +12,5 @@ docs, config examples and commit messages.
   from this machine.
 - The only real name allowed is the GitHub handle `slavafyi`. Do not use
   any other GitHub username of the owner.
-- Do not link to `SPEC.md` sections from code, tests or
+- Do not link to `docs/SPEC.md` sections from code, tests or
   `config.schema.json`.
