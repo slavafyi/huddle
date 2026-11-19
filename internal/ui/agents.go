@@ -3,11 +3,13 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/slavafyi/huddle/internal/launch"
 	"github.com/slavafyi/huddle/internal/rex"
 	"github.com/slavafyi/huddle/internal/store"
 )
@@ -41,6 +43,12 @@ type (
 	}
 	focusedMsg struct {
 		agent store.Agent
+		err   error
+	}
+	// reopenedMsg: a closed agent tab is open again (or reopening failed).
+	reopenedMsg struct {
+		block string // the closed tab's block
+		res   launch.Result
 		err   error
 	}
 )
@@ -287,9 +295,12 @@ func (a *App) agentKey(k string) tea.Cmd {
 		if !ok {
 			return nil
 		}
-		if !a.agentInfo[ag.BlockID].alive {
-			a.flash = sFaint.Render("that tab is closed · x to forget it")
+		switch i := a.agentInfo[ag.BlockID]; {
+		case !i.known:
+			a.flash = sFaint.Render("still checking that tab…")
 			return nil
+		case !i.alive:
+			return a.reopenAgent(ag)
 		}
 		rx := a.deps.Rex
 		return func() tea.Msg {
@@ -310,6 +321,44 @@ func (a *App) agentKey(k string) tea.Cmd {
 		a.ask(text, func() tea.Cmd { return a.closeAgent(ag, alive) })
 	}
 	return nil
+}
+
+// reopenAgent opens a closed agent tab again, resuming its session.
+func (a *App) reopenAgent(ag store.Agent) tea.Cmd {
+	if a.deps.Rex == nil {
+		return nil
+	}
+	if a.launching[ag.BlockID] {
+		a.flash = sYellow.Render("already reopening " + ag.TaskKey + "…")
+		return nil
+	}
+	a.launching[ag.BlockID] = true
+	a.flash = sFaint.Render("reopening " + ag.TaskKey + "…")
+	d := launch.Deps{Runner: a.deps.Runner, Rex: a.deps.Rex, Now: a.deps.Now}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		res, err := launch.Reopen(ctx, d, ag, tabName(ag.TaskKey, ag.Title))
+		return reopenedMsg{block: ag.BlockID, res: res, err: err}
+	}
+}
+
+func (a *App) onReopened(m reopenedMsg) tea.Cmd {
+	delete(a.launching, m.block)
+	if m.err != nil {
+		a.flash = sRed.Render(m.err.Error()) + sFaint.Render(" · x to forget it")
+		return nil
+	}
+	ag := m.res.Agent
+	a.state.ReplaceAgent(m.block, ag)
+	delete(a.agentInfo, m.block)
+	a.agentInfo[ag.BlockID] = agentInfo{known: true, alive: true}
+	a.rebuild()
+	a.flash = sGreen.Render("reopened " + ag.TaskKey)
+	if len(m.res.Warnings) > 0 {
+		a.flash += sYellow.Render(" · " + strings.Join(m.res.Warnings, " · "))
+	}
+	return tea.Batch(a.saveState(), a.refreshAgents())
 }
 
 // closeAgent closes the tab (when open) and forgets the agent.

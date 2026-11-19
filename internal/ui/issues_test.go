@@ -182,7 +182,8 @@ func TestStartPanelForIssue(t *testing.T) {
 		}
 	}
 	e.press("ctrl+s") // checkout, the default
-	want := "new-session shop | /r/shop | shop#42 Fix checkout | claude Take an issue #42"
+	ag := e.app.state.Agents[len(e.app.state.Agents)-1]
+	want := "new-session shop | /r/shop | shop#42 Fix checkout | claude --session-id " + ag.AgentSession + " Take an issue #42"
 	if len(e.rex.calls) == 0 || e.rex.calls[0] != want {
 		t.Fatalf("rex calls:\n%s\nwant:\n%s", strings.Join(e.rex.calls, "\n"), want)
 	}

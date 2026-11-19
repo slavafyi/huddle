@@ -126,3 +126,63 @@ func TestEnterFocusesFromAgents(t *testing.T) {
 		t.Errorf("rex calls = %v", e.rex.calls)
 	}
 }
+
+// resumable gives the closed DEV-7053 tab a folder and a claude session.
+func resumable(t *testing.T, e *testEnv) string {
+	dir := t.TempDir()
+	for i := range e.app.state.Agents {
+		if e.app.state.Agents[i].BlockID == "block:3" {
+			e.app.state.Agents[i].Dir = dir
+			e.app.state.Agents[i].Command = []string{"claude"}
+			e.app.state.Agents[i].AgentSession = "abc"
+		}
+	}
+	return dir
+}
+
+func TestEnterReopensAClosedTab(t *testing.T) {
+	e := agentsEnv(t)
+	dir := resumable(t, e)
+	e.rex.sessions["session:S"] = "Snowcap"
+	e.press("4", "j", "j") // Closed: DEV-7053
+	e.press("enter")
+	want := "new-window session:S | DEV-7053 DEV-7053 title | " + dir + " | claude --resume abc"
+	if len(e.rex.calls) < 1 || e.rex.calls[0] != want {
+		t.Fatalf("rex calls:\n%s\nwant:\n%s", strings.Join(e.rex.calls, "\n"), want)
+	}
+	st := e.stateOnDisk(t)
+	if len(st.Agents) != 3 || st.Agents[2].TaskKey != "DEV-7053" || st.Agents[2].BlockID == "block:3" || st.Agents[2].AgentSession != "abc" {
+		t.Errorf("state = %+v", st.Agents)
+	}
+	out := plain(e)
+	if !strings.Contains(out, "reopened DEV-7053") || strings.Contains(out, "Closed") {
+		t.Errorf("after reopen:\n%s", out)
+	}
+}
+
+func TestEnterOnAClosedTabThatCantReopen(t *testing.T) {
+	e := agentsEnv(t)
+	e.press("4", "j", "j") // Closed: DEV-7053, no command saved
+	e.press("enter")
+	if len(e.rex.calls) != 0 {
+		t.Errorf("rex calls = %v", e.rex.calls)
+	}
+	if out := plain(e); !strings.Contains(out, "no command to reopen · x to forget it") {
+		t.Errorf("no reason shown:\n%s", out)
+	}
+}
+
+func TestEnterWaitsWhileATabIsBeingChecked(t *testing.T) {
+	e := agentsEnv(t)
+	resumable(t, e)
+	e.app.agentInfo["block:3"] = agentInfo{} // not checked yet
+	e.app.rebuild()
+	e.press("4", "j", "j") // Checking…: DEV-7053
+	e.press("enter")
+	if len(e.rex.calls) != 0 {
+		t.Errorf("rex calls = %v", e.rex.calls)
+	}
+	if out := plain(e); !strings.Contains(out, "still checking that tab") {
+		t.Errorf("no reason shown:\n%s", out)
+	}
+}

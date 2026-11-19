@@ -93,3 +93,14 @@ release, and within a major version config changes only add settings.
 the newest released schema covers every config of that major version;
 pointing at `main` would show unreleased settings, and a pinned tag goes
 stale after the first minor release.
+
+## Reopen tabs with the agent's own session ID
+
+**Decision:** huddle sets the session ID at launch where the CLI allows it
+(claude, pi, opencode, cursor), in that agent's own format. For codex and
+agy, which can't take one, it finds the ID later in their session files.
+One adapter per program name hides the difference.
+**Why:** a preset ID is exact and uses documented flags. Reading an
+agent's files is fragile and can confuse two sessions in one folder, so
+it is used only where there is no other way. Hooks were not used: they
+need a global file per agent and, for codex, trusting the hook first.

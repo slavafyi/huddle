@@ -399,7 +399,7 @@ function helpLines() {
     Tasks: [['j/k ctrl+n/p', 'move'], ['gg / G', 'top / bottom'], ['ctrl+d/u', 'page down / up'], ['enter', 'start / focus agent'], ['shift+enter', 'start another agent'], ['s', 'status'], ['c', 'comment'], ['a', 'assign me'], ['o / p', 'open task / PR'], ['t', 'filter']],
     Issues: [['j/k ctrl+n/p', 'move'], ['gg / G', 'top / bottom'], ['ctrl+d/u', 'page down / up'], ['enter', 'start / focus agent'], ['s', 'close / reopen'], ['c', 'comment'], ['a', 'assign me'], ['o', 'open on GitHub'], ['t', 'filter']],
     PRs: [['j/k ctrl+n/p', 'move'], ['gg / G', 'top / bottom'], ['ctrl+d/u', 'page down / up'], ['enter', 'diff in a Rex tab'], ['o', 'open on GitHub']],
-    Agents: [['j/k ctrl+n/p', 'move'], ['gg / G', 'top / bottom'], ['ctrl+d/u', 'page down / up'], ['enter', 'focus tab'], ['x', 'close tab'], ['X', 'clean merged']],
+    Agents: [['j/k ctrl+n/p', 'move'], ['gg / G', 'top / bottom'], ['ctrl+d/u', 'page down / up'], ['enter', 'focus or reopen tab'], ['x', 'close tab'], ['X', 'clean merged']],
   }[v];
   const k = ([a, b]) => [['  ' + a + ' '.repeat(Math.max(1, 13 - len(a))), ''], [b, 'f']];
   const left = [T(v, 'b'), ...keys.map(k)];

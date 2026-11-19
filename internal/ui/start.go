@@ -16,6 +16,7 @@ import (
 
 	"github.com/slavafyi/huddle/internal/github"
 	"github.com/slavafyi/huddle/internal/launch"
+	"github.com/slavafyi/huddle/internal/resume"
 	"github.com/slavafyi/huddle/internal/rex"
 	"github.com/slavafyi/huddle/internal/store"
 	"github.com/slavafyi/huddle/internal/task"
@@ -404,7 +405,7 @@ func (a *App) plan() (launch.Plan, string) {
 	agent := p.agents[p.agentIdx]
 	lp := launch.Plan{
 		Task: t, Workspace: wp, AgentName: agent, Argv: launch.Argv(cfg.Agents, agent, prompt),
-		SessionID: p.session, TabName: t.Key + " " + ansi.Truncate(t.Name, 40, "…"),
+		Command: resume.Base(cfg.Agents[agent]), SessionID: p.session, TabName: tabName(t.Key, t.Name),
 	}
 	if p.showMove && p.moveStatus {
 		lp.SetStatus = a.rules[t.Source].MoveTo
@@ -413,6 +414,11 @@ func (a *App) plan() (launch.Plan, string) {
 		lp.AssignMe = a.cache.Me[t.Source]
 	}
 	return lp, ""
+}
+
+// tabName is an agent tab's name: the task ID and the start of its title.
+func tabName(key, title string) string {
+	return key + " " + ansi.Truncate(title, 40, "…")
 }
 
 func (a *App) launch() tea.Cmd {

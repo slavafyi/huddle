@@ -222,7 +222,7 @@ Prompt: text; arrows do nothing. `enter` launches.
 2. Rex: new tab `{id} <title>` in the client's session (one session per
    client, named after the ClickUp list, found by stored ID, else by
    name). Create the session if missing. The tab runs the agent with the
-   prompt.
+   prompt, and with a session ID when the agent takes one (see 4.5).
 3. Save the agent record; update ClickUp; remember the repo for this client.
 
 ### 4.5 Agents
@@ -236,6 +236,30 @@ reports it): working, blocked (needs input), done, error, idle.
 
 Focus or close a tab; offer to remove worktrees whose PR is merged (ask
 first).
+
+**Reopen:** `enter` on a closed tab opens it again in the same folder and
+client session, and resumes the agent's session. The agent is known by its
+command's program name, so your own `[agents]` entries get it too. The tab
+keeps its command without the prompt (a `--prompt`, `-i` or
+`--prompt-interactive` right before the prompt goes too) and the agent's
+session ID, in the agent's own format.
+
+| Command | Session ID | Reopen with |
+| --- | --- | --- |
+| `claude` | set at launch: `--session-id <id>` | `--resume <id>` |
+| `pi` | set at launch: `--session-id <id>` | `--session <id>` |
+| `opencode` | set at launch: `--session <id>` | `--session <id>` |
+| `cursor-agent` | asked from `cursor-agent create-chat` before launch, passed as `--resume <id>` | `--resume <id>` |
+| `codex` | found on reopen in codex's session files | `codex resume … <id>` |
+| `agy` | found on reopen in agy's history | `--conversation <id>` |
+
+A found session is the agent's first one in the tab's folder after the
+launch, not a subagent's. It is saved, so later reopens use it.
+
+A command that already picks a session (e.g. `--resume`) is left as is.
+When no ID can be set at launch, the tab still starts, with a warning.
+Other commands, a missing folder or no session found: the flash says why,
+`x` forgets the tab.
 
 ### 4.6 PRs
 
@@ -401,7 +425,8 @@ action runs (so `enter` can show a new one). No timers.
   `Huddle · <profile>`. A profile without sources shows "no sources in
   this profile" in Today and Tasks; PRs still work.
 - Per profile: cache `~/.cache/huddle/<profile>/cache.json`, state (agent
-  records, client → session, client → recent repos)
+  records with the command and session to reopen them, client → session,
+  client → recent repos)
   `~/.local/state/huddle/<profile>/state.json`. Tasks and agent records
   are keyed by source + ID.
 - Write JSON atomically (temp file + rename).

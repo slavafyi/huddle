@@ -6,9 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/slavafyi/huddle/internal/resume"
 	"github.com/slavafyi/huddle/internal/rex"
 	"github.com/slavafyi/huddle/internal/run"
 	"github.com/slavafyi/huddle/internal/store"
@@ -30,7 +33,8 @@ type Plan struct {
 	Workspace workspace.Plan
 	AgentName string
 	Argv      []string // nil opens a shell
-	SessionID string   // the client's stored session, "" if none
+	Command   []string // Argv's template without the prompt (resume.Base)
+	SessionID string   // the client's stored Rex session, "" if none
 	TabName   string
 	SetStatus string // "" leaves the status alone
 	AssignMe  int64  // 0 leaves assignees alone
@@ -87,42 +91,97 @@ func Open(ctx context.Context, d Deps, p Plan) (Result, error) {
 		return Result{}, err
 	}
 
-	sessions, err := d.Rex.Sessions(ctx)
-	if err != nil {
-		return Result{}, fmt.Errorf("list Rex sessions: %w", err)
-	}
-	session := clientSession(sessions, p.SessionID, p.Task.Project)
-	var pl rex.Placement
-	if session != "" {
-		pl, err = d.Rex.NewWindow(ctx, session, p.TabName, dir, p.Argv)
-	} else {
-		pl, err = d.Rex.NewSession(ctx, p.Task.Project, dir, p.TabName, p.Argv)
-	}
-	if err != nil {
-		return Result{}, fmt.Errorf("open Rex tab: %w", err)
+	var res Result
+	argv, agentSession := p.Argv, ""
+	if ad := resume.For(p.Argv); ad != nil {
+		a, id, err := ad.Start(ctx, d.Runner, dir, p.Argv)
+		if err != nil {
+			res.Warnings = append(res.Warnings, "no session ID, so the tab can't be reopened: "+err.Error())
+		}
+		argv, agentSession = a, id
 	}
 
-	res := Result{Agent: store.Agent{
+	pl, err := openTab(ctx, d.Rex, p.SessionID, p.Task.Project, dir, p.TabName, argv)
+	if err != nil {
+		return Result{}, err
+	}
+
+	res.Agent = store.Agent{
 		Source: p.Task.Source, TaskID: p.Task.ID, TaskKey: p.Task.Key, Title: p.Task.Name, Client: p.Task.Project,
-		Workspace: p.Workspace.Kind.ID(), Dir: dir, Agent: p.AgentName,
+		Workspace: p.Workspace.Kind.ID(), Dir: dir, Agent: p.AgentName, Command: p.Command, AgentSession: agentSession,
 		Placement: pl, Started: d.Now(),
-	}}
+	}
 	if p.Workspace.Kind != workspace.Scratch {
 		res.Agent.Repo = p.Workspace.Repo.Name
 	}
 	if p.Workspace.Kind == workspace.Worktree {
 		res.Agent.Branch = p.Workspace.Branch
 	}
+	res.Warnings = append(res.Warnings, focus(ctx, d.Rex, pl)...)
+	return res, nil
+}
 
-	if err := d.Rex.Focus(ctx, pl.SessionID, pl.WindowID); err != nil {
-		if errors.Is(err, rex.ErrRemoteControl) {
-			res.Warnings = append(res.Warnings, err.Error())
-		} else {
-			res.Warnings = append(res.Warnings, "focus tab: "+err.Error())
+// Reopen opens a closed agent tab again in its folder, resuming the agent's
+// session. The returned agent replaces ag (store.State.ReplaceAgent).
+func Reopen(ctx context.Context, d Deps, ag store.Agent, tabName string) (Result, error) {
+	ad := resume.For(ag.Command)
+	switch {
+	case len(ag.Command) == 0:
+		return Result{}, errors.New("this tab has no command to reopen")
+	case ad == nil:
+		return Result{}, fmt.Errorf("can't reopen %s sessions", filepath.Base(ag.Command[0]))
+	}
+	if fi, err := os.Stat(ag.Dir); err != nil || !fi.IsDir() {
+		return Result{}, fmt.Errorf("folder is gone: %s", ag.Dir)
+	}
+	id := ag.AgentSession
+	if id == "" {
+		var err error
+		if id, err = ad.Find(ag.Dir, ag.Started); err != nil {
+			return Result{}, fmt.Errorf("find the %s session: %w", ag.Agent, err)
+		}
+		if id == "" {
+			return Result{}, fmt.Errorf("no session of %s found in %s", filepath.Base(ag.Command[0]), ag.Dir)
 		}
 	}
 
-	return res, nil
+	pl, err := openTab(ctx, d.Rex, ag.SessionID, ag.Client, ag.Dir, tabName, ad.Command(ag.Command, id))
+	if err != nil {
+		return Result{}, err
+	}
+	ag.Placement, ag.AgentSession = pl, id
+	return Result{Agent: ag, Warnings: focus(ctx, d.Rex, pl)}, nil
+}
+
+// openTab opens a tab in the client's Rex session, creating the session
+// when it is missing.
+func openTab(ctx context.Context, rx rex.Client, stored, client, dir, tab string, argv []string) (rex.Placement, error) {
+	sessions, err := rx.Sessions(ctx)
+	if err != nil {
+		return rex.Placement{}, fmt.Errorf("list Rex sessions: %w", err)
+	}
+	var pl rex.Placement
+	if session := clientSession(sessions, stored, client); session != "" {
+		pl, err = rx.NewWindow(ctx, session, tab, dir, argv)
+	} else {
+		pl, err = rx.NewSession(ctx, client, dir, tab, argv)
+	}
+	if err != nil {
+		return rex.Placement{}, fmt.Errorf("open Rex tab: %w", err)
+	}
+	return pl, nil
+}
+
+// focus shows the new tab; failing to is only a warning.
+func focus(ctx context.Context, rx rex.Client, pl rex.Placement) []string {
+	err := rx.Focus(ctx, pl.SessionID, pl.WindowID)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, rex.ErrRemoteControl):
+		return []string{err.Error()}
+	}
+	return []string{"focus tab: " + err.Error()}
 }
 
 // Apply moves the task and assigns me in its source, as the plan says. It

@@ -26,6 +26,11 @@ type Agent struct {
 	Repo      string `json:"repo,omitempty"`
 	Branch    string `json:"branch,omitempty"`
 	Agent     string `json:"agent"`
+	// Command is the launch command without the prompt, to reopen the
+	// agent's session (resume.Base).
+	Command []string `json:"command,omitempty"`
+	// AgentSession is the agent's own session ID, "" until known.
+	AgentSession string `json:"agent_session,omitempty"`
 	rex.Placement
 	Started time.Time `json:"started"`
 }
@@ -59,6 +64,20 @@ func (s *State) RememberRepo(client, repo string) {
 // AddAgent records a new agent tab and the client's session.
 func (s *State) AddAgent(a Agent) {
 	s.Agents = append(s.Agents, a)
+	if s.ClientSessions == nil {
+		s.ClientSessions = map[string]string{}
+	}
+	s.ClientSessions[a.Client] = a.SessionID
+}
+
+// ReplaceAgent puts a in place of the agent with the given block ID, such
+// as when its tab is opened again, and records the client's session.
+func (s *State) ReplaceAgent(block string, a Agent) {
+	for i := range s.Agents {
+		if s.Agents[i].BlockID == block {
+			s.Agents[i] = a
+		}
+	}
 	if s.ClientSessions == nil {
 		s.ClientSessions = map[string]string{}
 	}

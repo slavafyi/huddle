@@ -21,6 +21,8 @@ issues with their PRs, and for starting a coding agent on a task in one step.
 - Start panel: pick a repo checkout, worktree or scratch folder and an agent
   (Claude Code, Codex, pi, opencode, Cursor, or your own), then launch it in a
   new Rex tab
+- Reopen a closed agent tab and resume its session (Claude Code, Codex, pi,
+  opencode, Cursor and Antigravity)
 - PRs view with CI state, linked to tasks and issues
 - Agents view with live state from Rex
 - Profiles: separate worlds (e.g. work ClickUp and personal GitHub), each with

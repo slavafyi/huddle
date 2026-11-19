@@ -418,6 +418,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, waitEvent(msg.ch)
 	case closedMsg:
 		return a, a.onClosed(msg)
+	case reopenedMsg:
+		return a, a.onReopened(msg)
 	case prsMsg:
 		return a, a.onPRs(msg)
 	case cleanedMsg:

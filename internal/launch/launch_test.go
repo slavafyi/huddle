@@ -3,7 +3,10 @@ package launch
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +14,7 @@ import (
 	"github.com/slavafyi/huddle/internal/clickup"
 	"github.com/slavafyi/huddle/internal/rex"
 	"github.com/slavafyi/huddle/internal/run"
+	"github.com/slavafyi/huddle/internal/store"
 	"github.com/slavafyi/huddle/internal/task"
 	"github.com/slavafyi/huddle/internal/workspace"
 )
@@ -104,7 +108,7 @@ func TestScratchInExistingSession(t *testing.T) {
 	dir := root + "/dev-7053-research-low-stock-notifications"
 	wantRex := []string{
 		"sessions",
-		"new-window session:S | DEV-7053 Research low stock notifications | " + dir + " | claude Take a task DEV-7053 from CU",
+		"new-window session:S | DEV-7053 Research low stock notifications | " + dir + " | claude --session-id " + res.Agent.AgentSession + " Take a task DEV-7053 from CU",
 		"focus session:S window:2",
 	}
 	if !reflect.DeepEqual(r.calls, wantRex) {
@@ -228,5 +232,130 @@ func TestOpenDoesNotTouchClickUp(t *testing.T) {
 	}
 	if len(cu.writes) != 0 {
 		t.Errorf("Open must not write to ClickUp: %v", cu.writes)
+	}
+}
+
+var isUUIDv4 = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+
+func TestOpenSetsTheAgentsSessionID(t *testing.T) {
+	r, _, _, d := setup()
+	p := Plan{Task: sampleTask(), Workspace: workspace.Plan{Kind: workspace.Scratch, ScratchRoot: t.TempDir(), TaskKey: "k", Slug: "s"},
+		AgentName: "claude", Argv: []string{"claude", "--model", "opus", "Take it"}, Command: []string{"claude", "--model", "opus"},
+		SessionID: "session:S", TabName: "T"}
+	res, err := Open(context.Background(), d, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := res.Agent
+	if !isUUIDv4.MatchString(a.AgentSession) {
+		t.Fatalf("agent session = %q", a.AgentSession)
+	}
+	if !strings.HasSuffix(r.calls[1], "| claude --session-id "+a.AgentSession+" --model opus Take it") {
+		t.Errorf("rex calls: %v", r.calls)
+	}
+	if !reflect.DeepEqual(a.Command, []string{"claude", "--model", "opus"}) {
+		t.Errorf("command = %q", a.Command)
+	}
+}
+
+func TestOpenWithoutAChatIDStillLaunches(t *testing.T) {
+	r, _, f, d := setup()
+	f.Responses = []run.Response{{Match: "cursor-agent create-chat", Err: errors.New("not logged in")}}
+	p := Plan{Task: sampleTask(), Workspace: workspace.Plan{Kind: workspace.Scratch, ScratchRoot: t.TempDir(), TaskKey: "k", Slug: "s"},
+		AgentName: "cursor", Argv: []string{"cursor-agent", "Take it"}, Command: []string{"cursor-agent"}, SessionID: "session:S", TabName: "T"}
+	res, err := Open(context.Background(), d, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(r.calls[1], "| cursor-agent Take it") || res.Agent.AgentSession != "" {
+		t.Errorf("rex calls: %v agent: %+v", r.calls, res.Agent)
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "not logged in") {
+		t.Errorf("warnings = %q", res.Warnings)
+	}
+}
+
+func closedAgent(dir string, command []string, session string) store.Agent {
+	return store.Agent{Source: "clickup", TaskID: "t1", TaskKey: "DEV-7053", Title: "Research", Client: "Snowcap",
+		Workspace: "scratch", Dir: dir, Agent: "x", Command: command, AgentSession: session, Started: now.Add(-time.Hour),
+		Placement: rex.Placement{SessionID: "session:S", WindowID: "window:1", BlockID: "block:1"}}
+}
+
+func TestReopenResumesTheSavedSession(t *testing.T) {
+	r, _, _, d := setup()
+	dir := t.TempDir()
+	res, err := Reopen(context.Background(), d, closedAgent(dir, []string{"claude", "--model", "opus"}, "abc"), "DEV-7053 Research")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"sessions",
+		"new-window session:S | DEV-7053 Research | " + dir + " | claude --resume abc --model opus",
+		"focus session:S window:2",
+	}
+	if !reflect.DeepEqual(r.calls, want) {
+		t.Errorf("rex calls:\n%s", strings.Join(r.calls, "\n"))
+	}
+	a := res.Agent
+	if a.BlockID != "block:2" || a.WindowID != "window:2" || a.AgentSession != "abc" || !a.Started.Equal(now.Add(-time.Hour)) || a.TaskKey != "DEV-7053" {
+		t.Errorf("agent = %+v", a)
+	}
+}
+
+func TestReopenFindsTheSessionTheAgentPicked(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	dir := t.TempDir()
+	at := now.Add(-time.Hour + 2*time.Second).Local()
+	file := filepath.Join(home, "sessions", at.Format("2006/01/02"), "rollout-"+at.Format("2006-01-02T15-04-05")+"-0ccccccc-0000-7000-8000-000000000001.jsonl")
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	meta := `{"type":"session_meta","payload":{"id":"0ccccccc-0000-7000-8000-000000000001","timestamp":"` + at.UTC().Format(time.RFC3339) + `","cwd":"` + dir + `","thread_source":"user"}}` + "\n"
+	if err := os.WriteFile(file, []byte(meta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, _, _, d := setup()
+	res, err := Reopen(context.Background(), d, closedAgent(dir, []string{"codex"}, ""), "T")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(r.calls[1], "| codex resume 0ccccccc-0000-7000-8000-000000000001") || res.Agent.AgentSession != "0ccccccc-0000-7000-8000-000000000001" {
+		t.Errorf("rex calls: %v agent: %+v", r.calls, res.Agent)
+	}
+}
+
+func TestReopenInANewSessionWhenTheOldOneIsGone(t *testing.T) {
+	r, _, _, d := setup()
+	r.sessions = map[string]string{}
+	dir := t.TempDir()
+	res, err := Reopen(context.Background(), d, closedAgent(dir, []string{"pi"}, "abc"), "T")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.calls[1] != "new-session Snowcap | "+dir+" | T | pi --session abc" || res.Agent.SessionID != "session:new" {
+		t.Errorf("rex calls: %v", r.calls)
+	}
+}
+
+func TestReopenStopsWhenItCant(t *testing.T) {
+	t.Setenv("CODEX_HOME", t.TempDir())
+	dir := t.TempDir()
+	cases := map[string]store.Agent{
+		"has no command":      closedAgent(dir, nil, ""),
+		"can't reopen aider":  closedAgent(dir, []string{"aider"}, ""),
+		"folder is gone":      closedAgent(filepath.Join(dir, "removed"), []string{"claude"}, "abc"),
+		"no session of codex": closedAgent(dir, []string{"codex"}, ""),
+	}
+	for want, ag := range cases {
+		r, _, _, d := setup()
+		_, err := Reopen(context.Background(), d, ag, "T")
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v", want, err)
+		}
+		if len(r.calls) != 0 {
+			t.Errorf("%s: rex calls = %v", want, r.calls)
+		}
 	}
 }

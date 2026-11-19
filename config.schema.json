@@ -56,7 +56,7 @@
       "default": "in progress"
     },
     "agents": {
-      "description": "Agent commands for the Start panel: name = argv. {prompt} is replaced by the prompt. Your own agents show after the built-in ones, sorted; a built-in name replaces its command.",
+      "description": "Agent commands for the Start panel: name = argv. {prompt} is replaced by the prompt. Your own agents show after the built-in ones, sorted; a built-in name replaces its command. Closed tabs can be reopened when the program is claude, codex, pi, opencode, cursor-agent or agy.",
       "type": "object",
       "additionalProperties": {
         "type": "array",

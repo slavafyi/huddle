@@ -51,7 +51,7 @@ func (a *App) viewKeys() (string, []keyHelp) {
 	case TabPRs:
 		return "PRs", append(append([]keyHelp(nil), moveKeys...), keyHelp{"enter", "diff in a Rex tab"}, keyHelp{"o", "open on GitHub"})
 	case TabAgents:
-		return "Agents", append(append([]keyHelp(nil), moveKeys...), keyHelp{"enter", "focus tab"}, keyHelp{"x", "close tab"}, keyHelp{"X", "clean merged"})
+		return "Agents", append(append([]keyHelp(nil), moveKeys...), keyHelp{"enter", "focus or reopen tab"}, keyHelp{"x", "close tab"}, keyHelp{"X", "clean merged"})
 	}
 	return "Today", taskKeys
 }

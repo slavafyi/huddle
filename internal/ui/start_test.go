@@ -98,9 +98,13 @@ func TestLaunchScratchAgent(t *testing.T) {
 	if e.app.mode != modeNormal {
 		t.Fatal("panel still open")
 	}
+	if len(e.app.state.Agents) != 1 {
+		t.Fatalf("agents = %+v", e.app.state.Agents)
+	}
+	id := e.app.state.Agents[0].AgentSession
 	dir := filepath.Join(e.scratch, "dev-7053-research-low-stock-notifications")
-	want := "new-session Snowcap | " + dir + " | DEV-7053 Research low stock notifications | claude Take a task DEV-7053 from CU"
-	if len(e.rex.calls) < 1 || e.rex.calls[0] != want {
+	want := "new-session Snowcap | " + dir + " | DEV-7053 Research low stock notifications | claude --session-id " + id + " Take a task DEV-7053 from CU"
+	if id == "" || len(e.rex.calls) < 1 || e.rex.calls[0] != want {
 		t.Fatalf("rex calls:\n%s\nwant:\n%s", strings.Join(e.rex.calls, "\n"), want)
 	}
 	if got := e.cu.writes; len(got) != 1 || got[0] != "status t4 in progress" {
@@ -110,7 +114,8 @@ func TestLaunchScratchAgent(t *testing.T) {
 		t.Errorf("task not updated on screen: %q", status(e, "t4"))
 	}
 	st := e.stateOnDisk(t)
-	if len(st.Agents) != 1 || st.Agents[0].TaskID != "t4" || st.ClientSessions["Snowcap"] != "session:Snowcap" {
+	if len(st.Agents) != 1 || st.Agents[0].TaskID != "t4" || st.ClientSessions["Snowcap"] != "session:Snowcap" ||
+		st.Agents[0].AgentSession != id || strings.Join(st.Agents[0].Command, " ") != "claude" {
 		t.Errorf("state = %+v", st)
 	}
 	if !strings.Contains(plain(e), "started DEV-7053") {
@@ -132,7 +137,7 @@ func TestLaunchUsesExistingClientSessionAndRemembersRepo(t *testing.T) {
 	if len(e.rex.calls) == 0 || !strings.HasPrefix(e.rex.calls[0], "new-window session:S | DEV-7700 ") {
 		t.Fatalf("rex calls: %v", e.rex.calls)
 	}
-	if !strings.HasSuffix(e.rex.calls[0], "claude Take a task DEV-7700 from CUx") {
+	if !strings.HasSuffix(e.rex.calls[0], " Take a task DEV-7700 from CUx") {
 		t.Errorf("edited prompt not used: %s", e.rex.calls[0])
 	}
 	st := e.stateOnDisk(t)
