@@ -27,18 +27,16 @@ func TestLoadMissingFileGivesDefaults(t *testing.T) {
 	if c.WorktreeRoot != "/home/u/.local/share/huddle/worktrees" {
 		t.Errorf("worktree root = %q", c.WorktreeRoot)
 	}
-	if got := strings.Join(c.AgentNames(), " "); got != "claude codex pi opencode cursor shell" {
+	if got := strings.Join(c.AgentNames(), " "); got != "claude codex shell" {
 		t.Errorf("agents = %v", got)
 	}
-	if got := strings.Join(c.Agents["opencode"], " "); got != "opencode --prompt {prompt}" {
-		t.Errorf("opencode = %q", got)
+	if got := strings.Join(c.Agents["codex"], " "); got != "codex {prompt}" {
+		t.Errorf("codex = %q", got)
 	}
-	if got := strings.Join(c.Agents["cursor"], " "); got != "cursor-agent {prompt}" {
-		t.Errorf("cursor = %q", got)
-	}
-	c.Agents["aider"] = []string{"aider"}
-	if got := strings.Join(c.AgentNames(), " "); got != "claude codex pi opencode cursor aider shell" {
-		t.Errorf("agents with a custom one = %v", got)
+	c.Agents["pi"] = []string{"pi", "{prompt}"}
+	c.Agents["agy"] = []string{"agy", "-i", "{prompt}"}
+	if got := strings.Join(c.AgentNames(), " "); got != "claude codex agy pi shell" {
+		t.Errorf("agents with your own = %v", got)
 	}
 }
 

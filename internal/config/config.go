@@ -112,11 +112,8 @@ func Default() Config {
 		ScratchPrefixes:  []string{"research", "evaluate", "investigate", "check", "audit"},
 		StatusInProgress: "in progress",
 		Agents: map[string][]string{
-			"claude":   {"claude", "{prompt}"},
-			"codex":    {"codex", "{prompt}"},
-			"pi":       {"pi", "{prompt}"},
-			"opencode": {"opencode", "--prompt", "{prompt}"},
-			"cursor":   {"cursor-agent", "{prompt}"},
+			"claude": {"claude", "{prompt}"},
+			"codex":  {"codex", "{prompt}"},
 		},
 	}
 }
@@ -289,7 +286,7 @@ func (c Config) BaseBranch(repo string) string {
 }
 
 // builtinAgents are the default agents, in Start panel order.
-var builtinAgents = []string{"claude", "codex", "pi", "opencode", "cursor"}
+var builtinAgents = []string{"claude", "codex"}
 
 // AgentNames lists agents for the Start panel: the built-in ones in their
 // order, then your own sorted, then the plain shell.

@@ -269,6 +269,8 @@ func TestEmptyRepoFilterShowsNoQuotes(t *testing.T) {
 // Arrows never move between fields; they work inside the field.
 func TestArrowsStayInField(t *testing.T) {
 	e := newEnv(t)
+	e.app.deps.Config.Agents["opencode"] = []string{"opencode", "--prompt", "{prompt}"}
+	e.app.deps.Config.Agents["pi"] = []string{"pi", "{prompt}"}
 	e.load(t)
 	selectTask(t, e, "t2")
 	e.press("enter")
@@ -281,8 +283,8 @@ func TestArrowsStayInField(t *testing.T) {
 	if p.field != fAgent {
 		t.Fatalf("field %v", p.field)
 	}
-	e.press("down") // the row below: claude → opencode
-	if p.agents[p.agentIdx] != "opencode" {
+	e.press("down") // the row below: claude → pi (claude codex opencode / pi shell)
+	if p.agents[p.agentIdx] != "pi" {
 		t.Errorf("down on agent: %s", p.agents[p.agentIdx])
 	}
 	e.press("up", "right")

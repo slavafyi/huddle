@@ -19,8 +19,7 @@ issues with their PRs, and for starting a coding agent on a task in one step.
 - Today view: in progress, up next, waiting on others, done this week
 - Task and issue lists with status, comment and assign actions
 - Start panel: pick a repo checkout, worktree or scratch folder and an agent
-  (Claude Code, Codex, pi, opencode, Cursor, or your own), then launch it in a
-  new Rex tab
+  (Claude Code, Codex, or your own), then launch it in a new Rex tab
 - Reopen a closed agent tab and resume its session (Claude Code, Codex, pi,
   opencode, Cursor and Antigravity)
 - PRs view with CI state, linked to tasks and issues
@@ -73,6 +72,22 @@ go install github.com/slavafyi/huddle/cmd/huddle@latest
    ```
 
 Press `?` in the app for keys.
+
+### Agents
+
+Claude Code and Codex are built in. Add other agents in `[agents]`, as a
+command where `{prompt}` is replaced by the prompt:
+
+```toml
+[agents]
+pi       = ["pi", "{prompt}"]
+opencode = ["opencode", "--prompt", "{prompt}"]
+cursor   = ["cursor-agent", "{prompt}"]
+agy      = ["agy", "-i", "{prompt}"]
+```
+
+Closed tabs of these agents can be reopened from the Agents tab with
+`enter`, and pick up the agent's session where it stopped.
 
 ## Development
 

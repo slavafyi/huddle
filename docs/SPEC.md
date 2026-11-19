@@ -148,8 +148,8 @@ Assigned / Opened by me". ClickUp without a lead field (§5) has only
 - **Repo:** the last ones used for this client first.
 - **Branch:** `feature/{id_lower}-{slug}` (slug: lowercase ASCII, up to 5
   words), e.g. `feature/dev-7700-promo-checkout-personalisation`.
-- **Agent:** claude (default), codex, pi, opencode, cursor, your own
-  `[agents]` (sorted), shell.
+- **Agent:** claude (default), codex, your own `[agents]` (sorted),
+  shell.
 - **Prompt:** empty means `Take a task {id} from CU`.
 - **Move to in progress** if the task is `to plan` / `to start`.
 - **Assign to me**: only shown when I'm not an assignee.
@@ -349,14 +349,15 @@ action runs (so `enter` can show a new one). No timers.
   later `vX.*`. Within a major version, config changes only add settings
   (with defaults that keep the old behavior); removing or renaming a
   setting, or changing what a value means, needs a major release.
-- **Agents:** built-in commands for claude, codex, pi, opencode, cursor
-  and shell. `[agents]` adds or replaces them:
+- **Agents:** built-in commands for claude, codex and shell. `[agents]`
+  adds or replaces them:
 
   ```toml
   [agents]
   pi       = ["pi", "{prompt}"]
   opencode = ["opencode", "--prompt", "{prompt}"]
   cursor   = ["cursor-agent", "{prompt}"]
+  agy      = ["agy", "-i", "{prompt}"]
   ```
 - **Profiles:** every other top-level table is a profile, in file order
   (`agents` and `repos` are reserved names). A profile is one named world:

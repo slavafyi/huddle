@@ -104,3 +104,12 @@ One adapter per program name hides the difference.
 agent's files is fragile and can confuse two sessions in one folder, so
 it is used only where there is no other way. Hooks were not used: they
 need a global file per agent and, for codex, trusting the hook first.
+
+## Only claude and codex are built in
+
+**Decision:** the Start panel lists claude, codex and shell by default;
+other agents come from `[agents]`.
+**Why:** a shorter list for the agents actually used. Resume still works
+for pi, opencode, cursor and agy commands added there. This changes the
+defaults, not the config format: a config without `[agents]` no longer
+shows pi, opencode or cursor.

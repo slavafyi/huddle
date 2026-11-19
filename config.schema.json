@@ -65,10 +65,7 @@
       },
       "default": {
         "claude": ["claude", "{prompt}"],
-        "codex": ["codex", "{prompt}"],
-        "pi": ["pi", "{prompt}"],
-        "opencode": ["opencode", "--prompt", "{prompt}"],
-        "cursor": ["cursor-agent", "{prompt}"]
+        "codex": ["codex", "{prompt}"]
       }
     },
     "repos": {

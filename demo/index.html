@@ -437,8 +437,8 @@ function startLines(t) {
     out.push(lab(fi++, 'Repo'), ...list.slice(0, 3).map((r, i) => i ? T('    ' + r, 'f') : [['  ', ''], ['› ' + r, 'b']]), T(list.length > 3 ? `    +${list.length - 3} more · type to filter` : '    type to filter', 'f'), []);
   }
   if (kind === 0) { out.push(lab(fi++, 'Branch'), T(`  feature/${low}-${slug}`), T('  ' + '┄'.repeat(inner - 2), 'f'), []); }
-  const agents = ['claude', 'codex', 'pi', 'opencode', 'cursor', 'shell'];
-  out.push(lab(fi++, 'Agent'), [['  ', ''], ...agents.slice(0, 3).flatMap((a, i) => radio(i === 0, a, 12))], [['  ', ''], ...agents.slice(3).flatMap(a => radio(false, a, 12))], []);
+  const agents = ['claude', 'codex', 'shell'];
+  out.push(lab(fi++, 'Agent'), [['  ', ''], ...agents.flatMap((a, i) => radio(i === 0, a, 12))], []);
   const prompt = issue ? (kind === 2 ? `Take an issue ${t.owner}/${iid(t)}` : `Take an issue #${t.n}`) : `Take a task ${t.id} from CU`;
   out.push(lab(fi++, 'Prompt'), ...[0, 1, 2, 3].map(i => T('  ' + (words(prompt, inner - 2)[i] || ''))), T('  ' + '┄'.repeat(inner - 2), state.field === fi - 1 ? '' : 'f'));
   if (!issue && ['to plan', 'to start'].includes(t.status)) out.push(T('  [x] Move to in progress', 'f'));
