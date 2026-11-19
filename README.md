@@ -1,5 +1,6 @@
 # huddle
 
+[![Version](https://img.shields.io/github/v/release/slavafyi/huddle)](https://github.com/slavafyi/huddle/releases/latest)
 [![Release](https://github.com/slavafyi/huddle/actions/workflows/release.yml/badge.svg)](https://github.com/slavafyi/huddle/actions/workflows/release.yml)
 [![Demo](https://github.com/slavafyi/huddle/actions/workflows/demo.yml/badge.svg)](https://github.com/slavafyi/huddle/actions/workflows/demo.yml)
 
